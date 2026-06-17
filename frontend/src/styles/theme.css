@@ -124,6 +124,26 @@ body {
   color: var(--text-secondary) !important;
 }
 
+.source-text-meter {
+  margin: -12px 0 18px;
+  font-size: 13px;
+}
+
+.style-description {
+  display: grid;
+  gap: 10px;
+  margin: -4px 0 22px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.style-description > div {
+  display: grid;
+  gap: 4px;
+}
+
 /* Scene card styles */
 .scene-card {
   background: var(--bg-card);
