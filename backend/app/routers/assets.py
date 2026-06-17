@@ -130,7 +130,11 @@ async def get_scene_file(
         raise HTTPException(status_code=404, detail="Scene not found")
 
     result = await db.execute(
-        select(Asset).where(Asset.scene_id == scene.id, Asset.type == file_type)
+        select(Asset).where(
+            Asset.project_id == project_id,
+            Asset.scene_id == scene.id,
+            Asset.type == file_type,
+        )
     )
     asset = result.scalar_one_or_none()
     if not asset:

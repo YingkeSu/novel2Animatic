@@ -58,7 +58,8 @@ async def test_delete_other_user_project_forbidden(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_delete_project_removes_storage_files(client: AsyncClient):
+async def test_delete_project_removes_storage_files(client: AsyncClient, tmp_path, monkeypatch):
+    monkeypatch.setattr("app.routers.projects.STORAGE_DIR", tmp_path)
     token = await register_and_get_token(client, "del4@example.com")
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -70,8 +71,7 @@ async def test_delete_project_removes_storage_files(client: AsyncClient):
     payload = jwt.decode(token, get_settings().SECRET_KEY, algorithms=[get_settings().ALGORITHM])
     user_id = payload["sub"]
 
-    storage_dir = Path("backend/storage")
-    project_dir = storage_dir / str(user_id) / str(pid)
+    project_dir = tmp_path / str(user_id) / str(pid)
     project_dir.mkdir(parents=True, exist_ok=True)
     (project_dir / "scene_1.png").write_bytes(b"png")
     (project_dir / "scene_1.mp3").write_bytes(b"mp3")
