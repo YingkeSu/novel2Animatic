@@ -49,6 +49,19 @@ async def test_create_project_empty_title(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_create_project_rejects_unknown_style(client: AsyncClient):
+    token = await register_and_get_token(client, "valid-style@test.com")
+    r = await client.post("/api/projects", json={
+        "title": "Unknown Style",
+        "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。",
+        "style_writing": "modern",
+        "style_visual": "does_not_exist",
+        "style_audio": "ancient_male"
+    }, headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_create_project_valid(client: AsyncClient):
     token = await register_and_get_token(client, "valid4@test.com")
     r = await client.post("/api/projects", json={
