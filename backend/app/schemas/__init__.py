@@ -1,25 +1,44 @@
 """Pydantic schemas for API request/response."""
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+import re
 from datetime import datetime
 from typing import Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.services.style_engine import list_styles
 
 AVAILABLE_WRITING_STYLES = {style["name"] for style in list_styles("writing")}
 AVAILABLE_VISUAL_STYLES = {style["name"] for style in list_styles("visual")}
 AVAILABLE_AUDIO_STYLES = {style["name"] for style in list_styles("audio")}
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 # Auth
 class RegisterRequest(BaseModel):
     email: str
-    password: str
+    password: str = Field(min_length=8)
+
+    @field_validator("email")
+    @classmethod
+    def email_valid(cls, v: str) -> str:
+        v = v.strip()
+        if not EMAIL_PATTERN.match(v):
+            raise ValueError("邮箱格式不正确")
+        return v
 
 
 class LoginRequest(BaseModel):
     email: str
-    password: str
+    password: str = Field(min_length=8)
+
+    @field_validator("email")
+    @classmethod
+    def email_valid(cls, v: str) -> str:
+        v = v.strip()
+        if not EMAIL_PATTERN.match(v):
+            raise ValueError("邮箱格式不正确")
+        return v
 
 
 class TokenResponse(BaseModel):
