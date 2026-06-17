@@ -66,6 +66,54 @@ async def test_list_projects_includes_latest_failure_message(client: AsyncClient
 
 
 @pytest.mark.asyncio
+async def test_list_projects_hides_stale_failure_message_after_retry(client: AsyncClient, db_session_factory):
+    token = await register_and_get_token(client, "list-stale-failure@example.com")
+    create_resp = await client.post("/api/projects", json={
+        "title": "Recovered Summary",
+        "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉"
+    }, headers={"Authorization": f"Bearer {token}"})
+    project_id = create_resp.json()["id"]
+
+    async with db_session_factory() as db:
+        project = await db.get(Project, project_id)
+        project.status = "running"
+        db.add(Task(project_id=project_id, user_id=project.user_id, status="failed", step="split_scenes", progress=10, error_msg="Old failure"))
+        db.add(Task(project_id=project_id, user_id=project.user_id, status="pending", step="generate_images", progress=40))
+        await db.commit()
+
+    response = await client.get("/api/projects", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    [project] = response.json()
+    assert project["status"] == "running"
+    assert project["latest_error_msg"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_projects_does_not_fall_back_to_older_failure_message(client: AsyncClient, db_session_factory):
+    token = await register_and_get_token(client, "list-newer-empty-failure@example.com")
+    create_resp = await client.post("/api/projects", json={
+        "title": "Newer Empty Failure",
+        "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉"
+    }, headers={"Authorization": f"Bearer {token}"})
+    project_id = create_resp.json()["id"]
+
+    async with db_session_factory() as db:
+        project = await db.get(Project, project_id)
+        project.status = "failed"
+        db.add(Task(project_id=project_id, user_id=project.user_id, status="failed", step="split_scenes", progress=10, error_msg="Old failure"))
+        db.add(Task(project_id=project_id, user_id=project.user_id, status="failed", step="generate_images", progress=40, error_msg=None))
+        await db.commit()
+
+    response = await client.get("/api/projects", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    [project] = response.json()
+    assert project["status"] == "failed"
+    assert project["latest_error_msg"] is None
+
+
+@pytest.mark.asyncio
 async def test_get_project_detail(client: AsyncClient):
     token = await register_and_get_token(client, "detail@example.com")
     create_resp = await client.post("/api/projects", json={
