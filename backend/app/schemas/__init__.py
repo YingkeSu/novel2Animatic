@@ -1,6 +1,6 @@
 """Pydantic schemas for API request/response."""
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime
 from typing import Optional
 
@@ -47,6 +47,8 @@ class ProjectCreate(BaseModel):
 
 
 class ProjectResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     title: str
     status: str
@@ -55,11 +57,10 @@ class ProjectResponse(BaseModel):
     style_audio: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class SceneResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     seq: int
     title: str
@@ -68,12 +69,9 @@ class SceneResponse(BaseModel):
     narration: str
     character: Optional[str] = None
 
-    class Config:
-        from_attributes = True
-
 
 class ProjectDetailResponse(ProjectResponse):
-    scenes: list[SceneResponse] = []
+    scenes: list[SceneResponse] = Field(default_factory=list)
 
 
 class ProgressResponse(BaseModel):
