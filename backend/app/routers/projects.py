@@ -1,5 +1,9 @@
 """Projects router."""
 
+from contextlib import suppress
+import shutil
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +19,7 @@ from app.schemas import ProjectCreate, ProjectResponse, ProjectDetailResponse, S
 from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+STORAGE_DIR = Path(__file__).parent.parent.parent / "storage"
 
 
 @router.post("", response_model=ProjectResponse)
@@ -84,5 +89,9 @@ async def delete_project(
     await db.execute(delete(Scene).where(Scene.project_id == project_id))
     await db.delete(project)
     await db.commit()
+
+    project_dir = STORAGE_DIR / str(project.user_id) / str(project.id)
+    with suppress(FileNotFoundError, NotADirectoryError):
+        shutil.rmtree(project_dir)
 
     return {"detail": "deleted"}
