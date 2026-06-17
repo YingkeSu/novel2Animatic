@@ -1,6 +1,7 @@
 """Test configuration and fixtures."""
 
 import os
+from dataclasses import dataclass
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
@@ -20,6 +21,12 @@ from app.config import get_settings
 from app.routers import auth, projects, pipeline, styles, assets
 
 TEST_DATABASE_URL = "postgresql+asyncpg://novel2animatic:novel2animatic@localhost:5432/novel2animatic_test"
+
+
+@dataclass
+class TestDbContext:
+    client: AsyncClient
+    session_factory: async_sessionmaker[AsyncSession]
 
 
 def _quote_identifier(identifier: str) -> str:
@@ -49,48 +56,64 @@ def _build_test_app() -> FastAPI:
     return test_app
 
 
+@asynccontextmanager
+async def _make_test_db_context():
+    schema_name = f"test_{uuid4().hex}"
+    quoted_schema = _quote_identifier(schema_name)
+    engine = create_async_engine(
+        TEST_DATABASE_URL,
+        echo=False,
+        connect_args={"server_settings": {"search_path": schema_name}},
+    )
+    test_app = _build_test_app()
+    session_factory = async_sessionmaker(
+        engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
+
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text(f"CREATE SCHEMA {quoted_schema}"))
+            await conn.execute(text(f"SET search_path TO {quoted_schema}"))
+            await conn.run_sync(Base.metadata.create_all)
+
+        test_app.dependency_overrides[get_db] = override_get_db
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield TestDbContext(client=ac, session_factory=session_factory)
+    finally:
+        test_app.dependency_overrides.clear()
+        async with engine.begin() as conn:
+            await conn.execute(text(f"DROP SCHEMA IF EXISTS {quoted_schema} CASCADE"))
+        await engine.dispose()
+
+
 @pytest.fixture
 def client_factory():
     @asynccontextmanager
     async def make_client():
-        schema_name = f"test_{uuid4().hex}"
-        quoted_schema = _quote_identifier(schema_name)
-        engine = create_async_engine(
-            TEST_DATABASE_URL,
-            echo=False,
-            connect_args={"server_settings": {"search_path": schema_name}},
-        )
-        test_app = _build_test_app()
-        session_factory = async_sessionmaker(
-            engine,
-            class_=AsyncSession,
-            expire_on_commit=False,
-        )
-
-        async def override_get_db():
-            async with session_factory() as session:
-                yield session
-
-        try:
-            async with engine.begin() as conn:
-                await conn.execute(text(f"CREATE SCHEMA {quoted_schema}"))
-                await conn.execute(text(f"SET search_path TO {quoted_schema}"))
-                await conn.run_sync(Base.metadata.create_all)
-
-            test_app.dependency_overrides[get_db] = override_get_db
-            transport = ASGITransport(app=test_app)
-            async with AsyncClient(transport=transport, base_url="http://test") as ac:
-                yield ac
-        finally:
-            test_app.dependency_overrides.clear()
-            async with engine.begin() as conn:
-                await conn.execute(text(f"DROP SCHEMA IF EXISTS {quoted_schema} CASCADE"))
-            await engine.dispose()
+        async with _make_test_db_context() as context:
+            yield context.client
 
     return make_client
 
 
 @pytest_asyncio.fixture
-async def client(client_factory):
-    async with client_factory() as ac:
-        yield ac
+async def test_db_context():
+    async with _make_test_db_context() as context:
+        yield context
+
+
+@pytest_asyncio.fixture
+async def client(test_db_context):
+    yield test_db_context.client
+
+
+@pytest_asyncio.fixture
+async def db_session_factory(test_db_context):
+    yield test_db_context.session_factory
