@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Button, Tag, Typography, message, Popconfirm } from 'antd'
+import { Button, Tag, Typography, message, Popconfirm, Tooltip } from 'antd'
 import {
   ExclamationCircleOutlined,
   ClockCircleOutlined,
@@ -161,6 +161,11 @@ export default function Dashboard() {
         <section className="dashboard-grid">
           {list.map(project => {
             const meta = getStatus(project.status)
+            const isDeleteDisabled = project.status === 'running'
+            const deleteAriaLabel = isDeleteDisabled
+              ? `生成中不可删除：${project.title}`
+              : `删除 ${project.title}`
+            const deleteTooltip = isDeleteDisabled ? '生成中不可删除' : undefined
 
             return (
               <article
@@ -213,22 +218,32 @@ export default function Dashboard() {
                     #{project.id}
                   </Text>
                   <div className="dashboard-card-actions">
-                    <Popconfirm
-                      title="确定删除此项目？"
-                      onConfirm={(event) => handleDelete(project.id, event)}
-                      onCancel={(event) => event?.stopPropagation?.()}
-                      okText="删除"
-                      cancelText="取消"
-                    >
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<DeleteOutlined />}
-                        danger
-                        aria-label={`删除 ${project.title}`}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </Popconfirm>
+                    <Tooltip title={deleteTooltip}>
+                      <span
+                        className="dashboard-delete-action"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <Popconfirm
+                          title="确定删除此项目？"
+                          onConfirm={(event) => handleDelete(project.id, event)}
+                          onCancel={(event) => event?.stopPropagation?.()}
+                          okText="删除"
+                          cancelText="取消"
+                          disabled={isDeleteDisabled}
+                        >
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<DeleteOutlined />}
+                            danger
+                            disabled={isDeleteDisabled}
+                            aria-label={deleteAriaLabel}
+                            title={deleteTooltip}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </Popconfirm>
+                      </span>
+                    </Tooltip>
                     <Button size="small" type="link" className="dashboard-open-link">
                       打开 <RightOutlined />
                     </Button>

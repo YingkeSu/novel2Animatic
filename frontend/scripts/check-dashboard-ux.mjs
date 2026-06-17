@@ -14,6 +14,10 @@ const requiredSnippets = [
   'dashboard-card-error',
   'status === 409',
   '项目正在生成中，暂时无法删除',
+  "project.status === 'running'",
+  '生成中不可删除',
+  'disabled={isDeleteDisabled}',
+  'aria-label={deleteAriaLabel}',
 ]
 
 const missing = requiredSnippets.filter((snippet) => !dashboard.includes(snippet))
