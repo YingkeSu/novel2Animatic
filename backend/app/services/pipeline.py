@@ -2,8 +2,9 @@
 
 import asyncio
 import json
+import shutil
 from pathlib import Path
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,6 +17,13 @@ from app.services.stepfun_client import StepFunClient
 from app.services.style_engine import get_writing_prompt, get_scene_split_prompt, get_visual_suffix, get_audio_params
 
 STORAGE_DIR = Path(__file__).parent.parent.parent / "storage"
+
+
+async def cleanup_pipeline_outputs(db: AsyncSession, user_id: int, project_id: int):
+    """Remove partial pipeline outputs for a project."""
+    await db.execute(delete(Asset).where(Asset.project_id == project_id))
+    await db.execute(delete(Scene).where(Scene.project_id == project_id))
+    shutil.rmtree(STORAGE_DIR / str(user_id) / str(project_id), ignore_errors=True)
 
 
 async def generate_reference_asset(db: AsyncSession, client: StepFunClient, project: Project, scenes: list, project_dir: Path):
@@ -73,6 +81,8 @@ async def run_pipeline_task(task_id: int):
         )
         task = result.scalar_one()
         project = task.project
+        project_id = project.id
+        user_id = project.user_id
 
         try:
             client = StepFunClient()
@@ -171,6 +181,8 @@ async def run_pipeline_task(task_id: int):
             await db.commit()
 
         except Exception as e:
+            await db.rollback()
+            await cleanup_pipeline_outputs(db, user_id, project_id)
             task.status = "failed"
             task.error_msg = str(e)[:500]
             project.status = "failed"
