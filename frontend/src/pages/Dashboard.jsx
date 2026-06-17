@@ -89,7 +89,9 @@ export default function Dashboard() {
       message.success('项目已删除')
       load()
     } catch (e) {
-      message.error('删除失败')
+      const status = e.response?.status
+      const detail = e.response?.data?.detail
+      message.error(status === 409 ? '项目正在生成中，暂时无法删除' : detail || '删除失败')
     }
   }
 
