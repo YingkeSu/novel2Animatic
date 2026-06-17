@@ -1,5 +1,7 @@
 """Tests for generated asset access."""
 
+from pathlib import Path
+
 import pytest
 from httpx import AsyncClient
 
@@ -11,7 +13,6 @@ from tests.test_projects import register_and_get_token
 async def test_reference_asset_downloads_with_authorization_header(
     client: AsyncClient,
     db_session_factory,
-    tmp_path,
 ):
     token = await register_and_get_token(client, "asset-reference@example.com")
     create_resp = await client.post(
@@ -23,7 +24,8 @@ async def test_reference_asset_downloads_with_authorization_header(
         headers={"Authorization": f"Bearer {token}"},
     )
     project_id = create_resp.json()["id"]
-    reference_path = tmp_path / "reference.png"
+    reference_path = Path("backend/storage") / "test-assets" / str(project_id) / "reference.png"
+    reference_path.parent.mkdir(parents=True, exist_ok=True)
     reference_path.write_bytes(b"reference")
 
     async with db_session_factory() as db:
@@ -38,6 +40,38 @@ async def test_reference_asset_downloads_with_authorization_header(
     assert response.status_code == 200
     assert response.content == b"reference"
     assert response.headers["content-type"] == "image/png"
+
+
+@pytest.mark.asyncio
+async def test_asset_path_outside_storage_root_is_not_served(
+    client: AsyncClient,
+    db_session_factory,
+    tmp_path,
+):
+    token = await register_and_get_token(client, "asset-path-safety@example.com")
+    create_resp = await client.post(
+        "/api/projects",
+        json={
+            "title": "Asset Path Safety",
+            "source_text": "这是一段足够长的测试文本，用来创建项目并验证资产路径安全。",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    project_id = create_resp.json()["id"]
+    outside_path = tmp_path / "outside-storage.mp4"
+    outside_path.write_bytes(b"outside")
+
+    async with db_session_factory() as db:
+        db.add(Asset(project_id=project_id, scene_id=None, type="video", file_path=str(outside_path), file_size=7))
+        await db.commit()
+
+    response = await client.get(
+        f"/api/projects/{project_id}/video",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Video file missing"
 
 
 @pytest.mark.asyncio
