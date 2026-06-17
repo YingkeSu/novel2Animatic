@@ -12,6 +12,8 @@ const requiredSnippets = [
   'dashboard-toolbar',
   'latest_error_msg',
   'dashboard-card-error',
+  'status === 409',
+  '项目正在生成中，暂时无法删除',
 ]
 
 const missing = requiredSnippets.filter((snippet) => !dashboard.includes(snippet))
