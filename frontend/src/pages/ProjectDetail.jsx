@@ -21,6 +21,8 @@ export default function ProjectDetail() {
   const [project, setProject] = useState(null)
   const [taskProgress, setTaskProgress] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [detailLoading, setDetailLoading] = useState(true)
+  const [detailError, setDetailError] = useState(null)
   const [styleMap, setStyleMap] = useState({})
   const [selectedScene, setSelectedScene] = useState(null)
   const [assetLoadingCount, setAssetLoadingCount] = useState(0)
@@ -51,6 +53,8 @@ export default function ProjectDetail() {
   }, [])
 
   const loadProject = async () => {
+    setDetailLoading(true)
+    setDetailError(null)
     try {
       const res = await projects.get(id)
       setProject(res.data)
@@ -59,6 +63,12 @@ export default function ProjectDetail() {
       }
     } catch (e) {
       console.error(e)
+      setProject(null)
+      const detail = e.response?.data?.detail || e.message || '项目加载失败'
+      const isNotFound = e.response?.status === 404 || /not found|不存在|未找到/i.test(detail)
+      setDetailError({ detail, isNotFound })
+    } finally {
+      setDetailLoading(false)
     }
   }
 
@@ -181,7 +191,60 @@ export default function ProjectDetail() {
     }, 2000)
   }
 
-  if (!project) return null
+  if (detailLoading && !project) {
+    return (
+      <div className="project-detail-state">
+        <div className="project-detail-state-card">
+          <div className="route-loading-mark" aria-hidden="true" />
+          <Title level={3} style={{ color: '#fff', marginBottom: 8 }}>正在加载项目详情</Title>
+          <Text style={{ color: 'var(--text-secondary)' }}>正在读取项目信息、场景和生成状态...</Text>
+        </div>
+      </div>
+    )
+  }
+
+  if (detailError && !project) {
+    const { detail, isNotFound } = detailError
+
+    return (
+      <div className="project-detail-state">
+        <div className="project-detail-state-card">
+          <Title level={3} style={{ color: '#fff', marginBottom: 8 }}>
+            {isNotFound ? '项目不存在' : '项目加载失败'}
+          </Title>
+          <Text style={{ color: 'var(--text-secondary)' }}>
+            {isNotFound ? '该项目可能已被删除，或当前链接无效。' : detail}
+          </Text>
+          <Space style={{ marginTop: 24 }}>
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/')}>
+              返回项目列表
+            </Button>
+            {!isNotFound && (
+              <Button type="primary" icon={<ReloadOutlined />} onClick={loadProject}>
+                重试
+              </Button>
+            )}
+          </Space>
+        </div>
+      </div>
+    )
+  }
+
+  if (!project) {
+    return (
+      <div className="project-detail-state">
+        <div className="project-detail-state-card">
+          <Title level={3} style={{ color: '#fff', marginBottom: 8 }}>项目暂不可用</Title>
+          <Text style={{ color: 'var(--text-secondary)' }}>当前项目状态无法显示，请返回项目列表后重试。</Text>
+          <div style={{ marginTop: 24 }}>
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/')}>
+              返回项目列表
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const displayName = (key) => styleMap[key] || key
 

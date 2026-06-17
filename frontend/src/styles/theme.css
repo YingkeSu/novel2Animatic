@@ -172,6 +172,28 @@ body {
   flex-direction: column;
 }
 
+.project-detail-state {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg-primary);
+}
+
+.project-detail-state-card {
+  width: min(440px, 100%);
+  padding: 28px;
+  text-align: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.project-detail-state-card .route-loading-mark {
+  margin: 0 auto 18px;
+}
+
 .project-detail-main {
   flex: 1;
   display: grid;

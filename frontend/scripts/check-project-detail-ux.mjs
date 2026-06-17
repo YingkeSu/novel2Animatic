@@ -11,6 +11,10 @@ const componentSnippets = [
   'clearPollInterval',
   "setImageUrl('')",
   "setAudioUrl('')",
+  'detailLoading',
+  'detailError',
+  'isNotFound',
+  'project-detail-state',
   'project-detail-page',
   'project-detail-main',
   'project-detail-sidebar',
@@ -19,6 +23,8 @@ const componentSnippets = [
 ]
 
 const styleSnippets = [
+  '.project-detail-state',
+  '.project-detail-state-card',
   '.project-detail-main',
   '.project-detail-sidebar',
   '.project-detail-video-panel',
