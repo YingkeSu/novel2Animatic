@@ -220,6 +220,17 @@ body {
   padding: 24px;
 }
 
+.project-detail-asset-status {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
 .project-detail-preview-stack {
   display: grid;
   gap: 16px;
