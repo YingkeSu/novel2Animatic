@@ -27,17 +27,22 @@ export default function ProjectDetail() {
   const [selectedScene, setSelectedScene] = useState(null)
   const [assetLoadingCount, setAssetLoadingCount] = useState(0)
   const [assetError, setAssetError] = useState('')
+  const [sceneAssetLoadingCount, setSceneAssetLoadingCount] = useState(0)
+  const [sceneAssetError, setSceneAssetError] = useState('')
+  const [sceneAssetSceneSeq, setSceneAssetSceneSeq] = useState(null)
   const [imageUrl, setImageUrl] = useState('')
   const [audioUrl, setAudioUrl] = useState('')
   const [videoUrl, setVideoUrl] = useState('')
   const [referenceUrl, setReferenceUrl] = useState('')
   const [referenceAsset, setReferenceAsset] = useState(null)
   const pollIntervalRef = useRef(null)
+  const sceneAssetRequestRef = useRef(0)
   const canRun = ['created', 'failed', 'done'].includes(project?.status)
   const isRunning = project?.status === 'running' || taskProgress?.status === 'pending'
   const isDone = project?.status === 'done'
   const pipelineFailure = project?.status === 'failed'
   const assetLoading = assetLoadingCount > 0
+  const sceneAssetLoading = sceneAssetLoadingCount > 0
 
   useEffect(() => {
     Promise.all([
@@ -151,6 +156,40 @@ export default function ProjectDetail() {
     }
   }
 
+  const loadSceneAssetUrl = async (path, setter, requestKey) => {
+    setSceneAssetLoadingCount((count) => count + 1)
+    setSceneAssetError('')
+    try {
+      const response = await api.get(path, { responseType: 'blob' })
+      const objectUrl = URL.createObjectURL(response.data)
+      if (requestKey !== sceneAssetRequestRef.current) {
+        URL.revokeObjectURL(objectUrl)
+        return
+      }
+      setter((current) => {
+        if (current) {
+          URL.revokeObjectURL(current)
+        }
+        return objectUrl
+      })
+    } catch (e) {
+      if (requestKey !== sceneAssetRequestRef.current) {
+        return
+      }
+      setSceneAssetError(e.response?.data?.detail || '当前场景媒体加载失败')
+      setter((current) => {
+        if (current) {
+          URL.revokeObjectURL(current)
+        }
+        return ''
+      })
+    } finally {
+      if (requestKey === sceneAssetRequestRef.current) {
+        setSceneAssetLoadingCount((count) => Math.max(0, count - 1))
+      }
+    }
+  }
+
   useEffect(() => {
     if (!isDone || !selectedScene) {
       return
@@ -158,8 +197,13 @@ export default function ProjectDetail() {
 
     setImageUrl('')
     setAudioUrl('')
-    loadAuthenticatedAssetUrl(`/projects/${id}/scenes/${selectedScene.seq}/image`, setImageUrl)
-    loadAuthenticatedAssetUrl(`/projects/${id}/scenes/${selectedScene.seq}/audio`, setAudioUrl)
+    sceneAssetRequestRef.current += 1
+    const requestKey = sceneAssetRequestRef.current
+    setSceneAssetSceneSeq(selectedScene.seq)
+    setSceneAssetLoadingCount(0)
+    setSceneAssetError('')
+    loadSceneAssetUrl(`/projects/${id}/scenes/${selectedScene.seq}/image`, setImageUrl, requestKey)
+    loadSceneAssetUrl(`/projects/${id}/scenes/${selectedScene.seq}/audio`, setAudioUrl, requestKey)
   }, [id, isDone, selectedScene])
 
   useEffect(() => {
@@ -269,6 +313,16 @@ export default function ProjectDetail() {
     ? PIPELINE_STEPS.findIndex(s => s.key === taskProgress.step)
     : isDone ? PIPELINE_STEPS.length - 1 : -1
   const pipelineFailureMessage = taskProgress?.error_msg || project.error_msg || 'Pipeline 执行失败，请重试生成。'
+  const currentSceneOwnsAssetStatus = isDone && selectedScene && sceneAssetSceneSeq === selectedScene.seq
+  const currentSceneAssetStatus = isDone && selectedScene
+    ? (!currentSceneOwnsAssetStatus
+      ? ''
+      : sceneAssetLoading
+      ? `正在加载当前场景媒体：Scene ${selectedScene.seq}`
+      : sceneAssetError
+        ? `当前场景媒体加载失败：Scene ${selectedScene.seq}`
+        : `当前场景媒体已就绪：Scene ${selectedScene.seq}`)
+    : ''
 
   return (
     <div className="project-detail-page">
@@ -346,6 +400,23 @@ export default function ProjectDetail() {
 
         {/* Center: Preview area */}
         <div className="project-detail-preview">
+          {currentSceneAssetStatus && (
+            <div className="project-detail-asset-status" aria-live="polite">
+              <Text type={sceneAssetError ? 'danger' : sceneAssetLoading ? 'secondary' : 'success'}>
+                {currentSceneAssetStatus}
+              </Text>
+            </div>
+          )}
+
+          {currentSceneOwnsAssetStatus && sceneAssetError && (
+            <Alert
+              type="warning"
+              showIcon
+              message={sceneAssetError}
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
           {assetError && (
             <Alert
               type="warning"
@@ -359,7 +430,7 @@ export default function ProjectDetail() {
             <Alert
               type="info"
               showIcon
-              message="正在加载媒体资源..."
+              message="正在加载项目媒体资源..."
               style={{ marginBottom: 16 }}
             />
           )}

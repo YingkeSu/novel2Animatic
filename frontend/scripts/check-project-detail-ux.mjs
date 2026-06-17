@@ -32,6 +32,18 @@ const componentSnippets = [
   'pipeline.progress(id)',
   'pollProgress()',
   'taskProgress?.status === \'pending\'',
+  'project-detail-asset-status',
+  '正在加载当前场景媒体',
+  'aria-live="polite"',
+  'sceneAssetLoadingCount',
+  'sceneAssetError',
+  'loadSceneAssetUrl',
+  '当前场景媒体加载失败',
+  'sceneAssetRequestRef',
+  'requestKey !== sceneAssetRequestRef.current',
+  'sceneAssetSceneSeq',
+  'currentSceneOwnsAssetStatus',
+  'sceneAssetSceneSeq === selectedScene.seq',
 ]
 
 const styleSnippets = [
@@ -42,6 +54,7 @@ const styleSnippets = [
   '.project-detail-sidebar',
   '.project-detail-video-panel',
   '.project-detail-prompt-panel',
+  '.project-detail-asset-status',
   '@media (max-width: 900px)',
   'grid-template-columns: 1fr',
 ]
