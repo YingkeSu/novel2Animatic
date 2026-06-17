@@ -30,10 +30,14 @@ def _extract_token(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> str:
     if authorization:
-        scheme, _, raw_token = authorization.partition(" ")
-        if scheme.lower() != "bearer" or not raw_token:
+        parts = authorization.split(None, 1)
+        if len(parts) != 2:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return raw_token
+        scheme, raw_token = parts
+        token = raw_token.strip()
+        if scheme.lower() != "bearer" or not token:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return token
     raise HTTPException(status_code=401, detail="Missing token")
 
 
