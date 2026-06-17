@@ -14,6 +14,9 @@ const componentSnippets = [
   'detailLoading',
   'detailError',
   'isNotFound',
+  'pipelineFailure',
+  'taskProgress?.error_msg',
+  'project-detail-failure',
   'project-detail-state',
   'project-detail-page',
   'project-detail-main',
@@ -25,6 +28,7 @@ const componentSnippets = [
 const styleSnippets = [
   '.project-detail-state',
   '.project-detail-state-card',
+  '.project-detail-failure',
   '.project-detail-main',
   '.project-detail-sidebar',
   '.project-detail-video-panel',
