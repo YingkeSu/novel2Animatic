@@ -4,6 +4,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.models.project import Project
+from app.models.scene import Scene
 from app.models.task import Task
 
 
@@ -74,6 +75,35 @@ async def test_get_project_detail(client: AsyncClient):
     response = await client.get(f"/api/projects/{project_id}", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
     assert response.json()["title"] == "Detail Test"
+
+
+@pytest.mark.asyncio
+async def test_get_project_detail_orders_scenes_by_sequence(client: AsyncClient, db_session_factory):
+    token = await register_and_get_token(client, "detail-scenes-order@example.com")
+    create_resp = await client.post("/api/projects", json={
+        "title": "Scene Order",
+        "source_text": "武松打虎是一段很长的故事文本用来测试场景顺序稳定。",
+    }, headers={"Authorization": f"Bearer {token}"})
+    project_id = create_resp.json()["id"]
+
+    async with db_session_factory() as db:
+        for seq in [2, 1, 3]:
+            db.add(Scene(
+                project_id=project_id,
+                seq=seq,
+                title=f"Scene {seq}",
+                text=f"Text {seq}",
+                shot_type="中景",
+                narration=f"Narration {seq}",
+                edit_prompt=f"Prompt {seq}",
+                instruction="语气自然",
+            ))
+        await db.commit()
+
+    response = await client.get(f"/api/projects/{project_id}", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert [scene["seq"] for scene in response.json()["scenes"]] == [1, 2, 3]
 
 
 @pytest.mark.asyncio
