@@ -60,6 +60,42 @@ async def test_login_wrong_password(client: AsyncClient):
     assert response.status_code == 401
 
 
+@pytest.mark.asyncio
+async def test_register_rejects_invalid_email(client: AsyncClient):
+    response = await client.post("/api/auth/register", json={
+        "email": "not-an-email",
+        "password": "testpassword123"
+    })
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_register_rejects_short_password(client: AsyncClient):
+    response = await client.post("/api/auth/register", json={
+        "email": "shortpass@example.com",
+        "password": "123"
+    })
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_login_rejects_invalid_email(client: AsyncClient):
+    response = await client.post("/api/auth/login", json={
+        "email": "not-an-email",
+        "password": "testpassword123"
+    })
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_login_rejects_short_password(client: AsyncClient):
+    response = await client.post("/api/auth/login", json={
+        "email": "shortpass@example.com",
+        "password": "123"
+    })
+    assert response.status_code == 422
+
+
 def test_password_hashing_roundtrip():
     hashed = hash_password("short-password")
     assert hashed != "short-password"
