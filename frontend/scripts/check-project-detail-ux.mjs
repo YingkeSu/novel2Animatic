@@ -23,6 +23,10 @@ const componentSnippets = [
   'project-detail-sidebar',
   'project-detail-preview',
   'project-detail-video-panel',
+  'project-detail-prompt-panel',
+  'selectedScene.edit_prompt',
+  'selectedScene.instruction',
+  'selectedScene.text',
 ]
 
 const styleSnippets = [
@@ -32,6 +36,7 @@ const styleSnippets = [
   '.project-detail-main',
   '.project-detail-sidebar',
   '.project-detail-video-panel',
+  '.project-detail-prompt-panel',
   '@media (max-width: 900px)',
   'grid-template-columns: 1fr',
 ]

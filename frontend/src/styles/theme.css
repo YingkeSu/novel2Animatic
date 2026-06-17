@@ -236,6 +236,47 @@ body {
   padding: 16px;
 }
 
+.project-detail-prompt-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.project-detail-prompt-title {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.project-detail-prompt-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.project-detail-prompt-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.project-detail-prompt-copy.ant-typography {
+  margin: 0;
+  max-height: 132px;
+  overflow: auto;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
 .project-detail-failure {
   display: grid;
   justify-items: center;
