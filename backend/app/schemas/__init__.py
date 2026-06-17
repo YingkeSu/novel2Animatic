@@ -64,11 +64,12 @@ class ProjectCreate(BaseModel):
     @field_validator("source_text")
     @classmethod
     def source_text_valid(cls, v: str) -> str:
-        if not v or not v.strip():
+        source_text = v.strip() if v else ""
+        if not source_text:
             raise ValueError("文段不能为空")
-        if len(v.strip()) < 5:
-            raise ValueError("文段至少需要5个字符")
-        return v.strip()
+        if len(source_text) < 80:
+            raise ValueError("文段至少需要80个字符")
+        return source_text
 
     @field_validator("style_writing")
     @classmethod

@@ -21,7 +21,7 @@ async def test_create_project(client: AsyncClient):
     token = await register_and_get_token(client)
     response = await client.post("/api/projects", json={
         "title": "Test Project",
-        "source_text": "这是一段测试文本。",
+        "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
         "style_writing": "modern",
         "style_visual": "ink_wash",
         "style_audio": "ancient_male"
@@ -36,7 +36,7 @@ async def test_create_project(client: AsyncClient):
 async def test_list_projects(client: AsyncClient):
     token = await register_and_get_token(client, "list@example.com")
     await client.post("/api/projects", json={
-        "title": "P1", "source_text": "林冲风雪山神庙是一段很长的故事文本用来测试。"
+        "title": "P1", "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉"
     }, headers={"Authorization": f"Bearer {token}"})
     response = await client.get("/api/projects", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
@@ -48,7 +48,7 @@ async def test_list_projects_includes_latest_failure_message(client: AsyncClient
     token = await register_and_get_token(client, "list-failure@example.com")
     create_resp = await client.post("/api/projects", json={
         "title": "Failed Summary",
-        "source_text": "林冲风雪山神庙是一段很长的故事文本用来测试失败原因展示。"
+        "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉"
     }, headers={"Authorization": f"Bearer {token}"})
     project_id = create_resp.json()["id"]
 
@@ -69,7 +69,7 @@ async def test_list_projects_includes_latest_failure_message(client: AsyncClient
 async def test_get_project_detail(client: AsyncClient):
     token = await register_and_get_token(client, "detail@example.com")
     create_resp = await client.post("/api/projects", json={
-        "title": "Detail Test", "source_text": "武松打虎是一段很长的故事文本用来测试验证。"
+        "title": "Detail Test", "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉"
     }, headers={"Authorization": f"Bearer {token}"})
     project_id = create_resp.json()["id"]
     response = await client.get(f"/api/projects/{project_id}", headers={"Authorization": f"Bearer {token}"})
@@ -82,7 +82,7 @@ async def test_get_project_detail_orders_scenes_by_sequence(client: AsyncClient,
     token = await register_and_get_token(client, "detail-scenes-order@example.com")
     create_resp = await client.post("/api/projects", json={
         "title": "Scene Order",
-        "source_text": "武松打虎是一段很长的故事文本用来测试场景顺序稳定。",
+        "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
     }, headers={"Authorization": f"Bearer {token}"})
     project_id = create_resp.json()["id"]
 
@@ -111,7 +111,7 @@ async def test_get_project_detail_includes_scene_prompt_fields(client: AsyncClie
     token = await register_and_get_token(client, "detail-scene-prompts@example.com")
     create_resp = await client.post("/api/projects", json={
         "title": "Scene Prompts",
-        "source_text": "武松打虎是一段很长的故事文本用来测试场景提示词展示。",
+        "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
     }, headers={"Authorization": f"Bearer {token}"})
     project_id = create_resp.json()["id"]
 
