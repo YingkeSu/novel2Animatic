@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Button, Tag, Typography, message, Popconfirm } from 'antd'
 import {
+  ExclamationCircleOutlined,
   ClockCircleOutlined,
   DeleteOutlined,
   FileTextOutlined,
@@ -186,6 +187,12 @@ export default function Dashboard() {
                 </div>
 
                 <Text className="dashboard-card-status">{meta.description}</Text>
+                {project.status === 'failed' && project.latest_error_msg && (
+                  <div className="dashboard-card-error" title={project.latest_error_msg}>
+                    <ExclamationCircleOutlined />
+                    <Text>{project.latest_error_msg}</Text>
+                  </div>
+                )}
 
                 <div className="dashboard-card-tags">
                   <Tag color="purple" title={displayName(project.style_writing)}>

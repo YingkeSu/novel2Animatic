@@ -50,7 +50,27 @@ async def list_projects(
     result = await db.execute(
         select(Project).where(Project.user_id == user.id).order_by(Project.created_at.desc())
     )
-    return result.scalars().all()
+    projects = result.scalars().all()
+    if not projects:
+        return projects
+
+    task_result = await db.execute(
+        select(Task.project_id, Task.error_msg)
+        .where(
+            Task.project_id.in_([project.id for project in projects]),
+            Task.status == "failed",
+            Task.error_msg.is_not(None),
+        )
+        .order_by(Task.created_at.desc(), Task.id.desc())
+    )
+    latest_errors = {}
+    for project_id, error_msg in task_result.all():
+        latest_errors.setdefault(project_id, error_msg)
+
+    for project in projects:
+        project.latest_error_msg = latest_errors.get(project.id)
+
+    return projects
 
 
 @router.get("/{project_id}", response_model=ProjectDetailResponse)

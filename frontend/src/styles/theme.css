@@ -438,6 +438,36 @@ body {
   margin-bottom: 12px;
 }
 
+.dashboard-card-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 42px;
+  margin-bottom: 12px;
+  padding: 10px;
+  color: var(--error);
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.2);
+  border-radius: var(--radius-sm);
+}
+
+.dashboard-card-error .anticon {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.dashboard-card-error .ant-typography {
+  display: -webkit-box;
+  margin: 0;
+  color: var(--error);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .dashboard-card-tags {
   display: flex;
   flex-wrap: wrap;
