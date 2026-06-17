@@ -72,6 +72,33 @@ async def get_video(
     return FileResponse(path=str(file_path), media_type="video/mp4", filename=f"project_{project_id}.mp4")
 
 
+@router.get("/{project_id}/reference")
+async def get_reference(
+    project_id: int,
+    token: str = Depends(_extract_token),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await _resolve_user(token, db)
+    result = await db.execute(
+        select(Project).where(Project.id == project_id, Project.user_id == user.id)
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    result = await db.execute(
+        select(Asset).where(Asset.project_id == project_id, Asset.type == "reference")
+    )
+    asset = result.scalar_one_or_none()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Reference image not found")
+
+    file_path = Path(asset.file_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Reference image file missing")
+
+    return FileResponse(path=str(file_path), media_type="image/png", filename=f"project_{project_id}_reference.png")
+
+
 @router.get("/{project_id}/scenes/{scene_seq}/{file_type}")
 async def get_scene_file(
     project_id: int,

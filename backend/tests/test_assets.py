@@ -3,7 +3,41 @@
 import pytest
 from httpx import AsyncClient
 
+from app.models.asset import Asset
 from tests.test_projects import register_and_get_token
+
+
+@pytest.mark.asyncio
+async def test_reference_asset_downloads_with_authorization_header(
+    client: AsyncClient,
+    db_session_factory,
+    tmp_path,
+):
+    token = await register_and_get_token(client, "asset-reference@example.com")
+    create_resp = await client.post(
+        "/api/projects",
+        json={
+            "title": "Asset Reference",
+            "source_text": "这是一段足够长的测试文本，用来创建项目并验证参考图资产接口。",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    project_id = create_resp.json()["id"]
+    reference_path = tmp_path / "reference.png"
+    reference_path.write_bytes(b"reference")
+
+    async with db_session_factory() as db:
+        db.add(Asset(project_id=project_id, scene_id=None, type="reference", file_path=str(reference_path), file_size=9))
+        await db.commit()
+
+    response = await client.get(
+        f"/api/projects/{project_id}/reference",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"reference"
+    assert response.headers["content-type"] == "image/png"
 
 
 @pytest.mark.asyncio

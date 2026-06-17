@@ -18,6 +18,53 @@ from app.services.style_engine import get_writing_prompt, get_scene_split_prompt
 STORAGE_DIR = Path(__file__).parent.parent.parent / "storage"
 
 
+async def generate_reference_asset(db: AsyncSession, client: StepFunClient, project: Project, scenes: list, project_dir: Path):
+    """Generate a project-level reference image and persist it as an asset."""
+    project_dir.mkdir(parents=True, exist_ok=True)
+    reference_path = project_dir / "reference.png"
+
+    selected_scene = next((scene for scene in scenes if getattr(scene, "character", None)), scenes[0] if scenes else None)
+    character = getattr(selected_scene, "character", None) if selected_scene else None
+    scene_prompt = ""
+    if selected_scene is not None:
+        scene_prompt = (
+            getattr(selected_scene, "edit_prompt", None)
+            or getattr(selected_scene, "text", None)
+            or getattr(selected_scene, "narration", None)
+            or ""
+        )
+    if not scene_prompt:
+        scene_prompt = project.source_text
+
+    prompt_parts = ["为整个项目生成一张统一风格的参考图。"]
+    if character:
+        prompt_parts.append(f"角色：{character}。")
+    if scene_prompt:
+        prompt_parts.append(f"场景提示：{scene_prompt}。")
+    visual_suffix = get_visual_suffix(project.style_visual)
+    if visual_suffix:
+        prompt_parts.append(visual_suffix)
+
+    image_data = await asyncio.to_thread(
+        client.image_generate,
+        prompt="".join(prompt_parts),
+        extra_body={"cfg_scale": 1.0, "steps": 8, "seed": 41},
+        size="1024x1024",
+    )
+    reference_path.write_bytes(image_data)
+
+    asset = Asset(
+        project_id=project.id,
+        scene_id=None,
+        type="reference",
+        file_path=str(reference_path),
+        file_size=len(image_data),
+    )
+    db.add(asset)
+    await db.flush()
+    return asset
+
+
 async def run_pipeline_task(task_id: int):
     """Execute the full pipeline for a task."""
     async with async_session() as db:
@@ -61,15 +108,16 @@ async def run_pipeline_task(task_id: int):
             project_dir = STORAGE_DIR / str(project.user_id) / str(project.id)
             project_dir.mkdir(parents=True, exist_ok=True)
 
-            # Step 3: Generate scene images
-            task.step = "generate_images"
-            task.progress = 40
-            await db.commit()
-
             scenes_result = await db.execute(
                 select(Scene).where(Scene.project_id == project.id).order_by(Scene.seq)
             )
             scenes = scenes_result.scalars().all()
+            await generate_reference_asset(db, client, project, scenes, project_dir)
+
+            # Step 3: Generate scene images
+            task.step = "generate_images"
+            task.progress = 40
+            await db.commit()
 
             visual_suffix = get_visual_suffix(project.style_visual)
             for scene in scenes:
