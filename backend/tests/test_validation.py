@@ -66,6 +66,34 @@ async def test_create_project_empty_title(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_create_project_rejects_title_over_database_limit(client: AsyncClient):
+    token = await register_and_get_token(client, "valid-title-limit@test.com")
+    r = await client.post("/api/projects", json={
+        "title": "标" * 256,
+        "source_text": VALID_SOURCE_TEXT,
+        "style_writing": "modern",
+        "style_visual": "ink_wash",
+        "style_audio": "ancient_male"
+    }, headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_project_accepts_title_at_database_limit(client: AsyncClient):
+    token = await register_and_get_token(client, "valid-title-at-limit@test.com")
+    title = "标" * 255
+    r = await client.post("/api/projects", json={
+        "title": title,
+        "source_text": VALID_SOURCE_TEXT,
+        "style_writing": "modern",
+        "style_visual": "ink_wash",
+        "style_audio": "ancient_male"
+    }, headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    assert r.json()["title"] == title
+
+
+@pytest.mark.asyncio
 async def test_create_project_rejects_unknown_style(client: AsyncClient):
     token = await register_and_get_token(client, "valid-style@test.com")
     r = await client.post("/api/projects", json={

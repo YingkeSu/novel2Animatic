@@ -12,6 +12,8 @@ const requiredSnippets = [
   'styleLoadError',
   'disabled={styleLoading || loading}',
   'minimumSceneTextLength',
+  'maximumProjectTitleLength',
+  'max: maximumProjectTitleLength',
 ]
 
 const missing = requiredSnippets.filter((snippet) => !createProject.includes(snippet))
