@@ -150,13 +150,13 @@ Backend feature changes should include or update the matching pytest coverage an
 - `ffmpeg`: video assembly requires `ffmpeg` on `PATH`. If pipeline jobs reach video assembly and fail, run `ffmpeg -version` from the same shell that starts `uvicorn`.
 - StepFun API: invalid, missing, or quota-limited `STEPFUN_API_KEY` can fail scene splitting, image generation, or TTS. `STEPFUN_BASE_URL` defaults to the StepFun endpoint listed above; only override it when testing against a compatible API.
 - Vite proxy/API connection: the frontend expects the backend at `http://localhost:8000` for `/api` during local dev. Start `uvicorn` first, check `/health`, and keep `CORS_ALLOWED_ORIGINS` including the Vite origin you use.
-- Local generated assets: generated files are stored under `backend/storage/{user_id}/{project_id}/` and served only through authenticated project asset routes. Asset records pointing outside the storage root are rejected, and browser media previews use query tokens because media tags cannot send `Authorization` headers.
+- Local generated assets: generated files are stored under `backend/storage/{user_id}/{project_id}/` and served only through authenticated project asset routes. Asset records pointing outside the storage root are rejected, and browser previews load media through authenticated blob URLs.
 
 ## Security Notes
 
 - `SECRET_KEY` and `STEPFUN_API_KEY` are required at runtime and must not be committed.
 - CORS rejects origins outside `CORS_ALLOWED_ORIGINS`; keep production origins explicit.
-- Project, progress, and asset routes enforce user ownership. Asset URLs use a query-token because browser media tags cannot send the normal `Authorization` header.
+- Project, progress, and asset routes enforce user ownership. Asset routes remain authenticated, and browser previews load media through authenticated blob URLs.
 - Passwords are stored as hashes, and access tokens expire according to `ACCESS_TOKEN_EXPIRE_MINUTES`.
 - Style plugin loading rejects path traversal and only reads single-component YAML names from the configured styles directory.
 
