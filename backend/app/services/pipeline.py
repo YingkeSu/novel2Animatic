@@ -273,7 +273,7 @@ async def assemble_video(project_dir: Path, scenes: list, video_path: Path):
             segments.append(segment)
 
     if not segments:
-        return
+        raise RuntimeError("No video segments available")
 
     concat_file = project_dir / "concat.txt"
     with open(concat_file, "w") as f:

@@ -114,6 +114,14 @@ async def test_assemble_video_raises_when_ffmpeg_segment_fails(tmp_path, monkeyp
 
 
 @pytest.mark.asyncio
+async def test_assemble_video_raises_when_no_segments_are_available(tmp_path):
+    scene = SimpleNamespace(seq=1)
+
+    with pytest.raises(RuntimeError, match="No video segments"):
+        await assemble_video(tmp_path, [scene], tmp_path / "final.mp4")
+
+
+@pytest.mark.asyncio
 async def test_run_pipeline_task_cleans_partial_outputs_on_failure(db_session_factory, tmp_path, monkeypatch):
     class FailingImageClient:
         def __init__(self):
