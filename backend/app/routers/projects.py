@@ -20,6 +20,7 @@ from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 STORAGE_DIR = Path(__file__).parent.parent.parent / "storage"
+TERMINAL_TASK_STATUSES = {"done", "failed"}
 
 
 @router.post("", response_model=ProjectResponse)
@@ -102,6 +103,15 @@ async def delete_project(
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    task_result = await db.execute(
+        select(Task)
+        .where(Task.project_id == project_id, Task.user_id == user.id)
+        .order_by(Task.created_at.desc(), Task.id.desc())
+    )
+    latest_task = task_result.scalars().first()
+    if latest_task and latest_task.status not in TERMINAL_TASK_STATUSES:
+        raise HTTPException(status_code=409, detail="Pipeline is still running")
 
     # Delete in order: tasks, assets, scenes, then project
     await db.execute(delete(Task).where(Task.project_id == project_id))
