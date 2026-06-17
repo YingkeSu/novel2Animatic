@@ -199,10 +199,11 @@ def split_scenes_sync(client: StepFunClient, text: str, style: str) -> list:
     default_scene = [{"title": "Scene 1", "text": text, "shot_type": "中景", "narration": text, "edit_prompt": text, "instruction": "语气自然", "character": None}]
 
     def normalize_string(value, default):
-        return value if isinstance(value, str) and value else default
+        value = value.strip() if isinstance(value, str) else ""
+        return value if value else default
 
     def normalize_scene(scene, index):
-        character = scene.get("character")
+        character = normalize_string(scene.get("character"), "")
         return {
             "title": normalize_string(scene.get("title"), f"Scene {index}"),
             "text": normalize_string(scene.get("text"), text),
@@ -210,7 +211,7 @@ def split_scenes_sync(client: StepFunClient, text: str, style: str) -> list:
             "narration": normalize_string(scene.get("narration"), text),
             "edit_prompt": normalize_string(scene.get("edit_prompt"), text),
             "instruction": normalize_string(scene.get("instruction"), "语气自然"),
-            "character": character if isinstance(character, str) and character else None,
+            "character": character or None,
         }
 
     system_msg = build_scene_split_system_prompt(style)
