@@ -15,6 +15,7 @@ from app.schemas import ProgressResponse
 from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/api/projects", tags=["pipeline"])
+TERMINAL_TASK_STATUSES = {"done", "failed"}
 
 
 @router.post("/{project_id}/run")
@@ -30,11 +31,18 @@ async def run_pipeline(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    if project.status == "running":
+    task_result = await db.execute(
+        select(Task)
+        .where(Task.project_id == project_id, Task.user_id == user.id)
+        .order_by(Task.created_at.desc(), Task.id.desc())
+    )
+    latest_task = task_result.scalars().first()
+
+    if latest_task and latest_task.status not in TERMINAL_TASK_STATUSES:
         raise HTTPException(status_code=409, detail="Pipeline already running")
 
     # Clean up old data if retrying (assets first due to scene_id FK)
-    if project.status in ("failed", "done"):
+    if latest_task and latest_task.status in TERMINAL_TASK_STATUSES:
         await db.execute(delete(Asset).where(Asset.project_id == project_id))
         await db.execute(delete(Scene).where(Scene.project_id == project_id))
         await db.commit()
@@ -60,7 +68,7 @@ async def get_progress(
     result = await db.execute(
         select(Task)
         .where(Task.project_id == project_id, Task.user_id == user.id)
-        .order_by(Task.created_at.desc())
+        .order_by(Task.created_at.desc(), Task.id.desc())
     )
     task = result.first()
     if not task:
