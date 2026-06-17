@@ -42,6 +42,12 @@ def get_writing_prompt(style_name: str) -> str:
     return style.get("system_prompt", "")
 
 
+def get_scene_split_prompt(style_name: str) -> str:
+    """Get scene splitting prompt for writing style."""
+    style = load_style("writing", style_name)
+    return style.get("scene_split_prompt", "")
+
+
 def get_visual_suffix(style_name: str) -> str:
     """Get prompt suffix for visual style."""
     style = load_style("visual", style_name)

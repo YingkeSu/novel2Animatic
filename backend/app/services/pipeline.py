@@ -13,7 +13,7 @@ from app.models.scene import Scene
 from app.models.task import Task
 from app.models.asset import Asset
 from app.services.stepfun_client import StepFunClient
-from app.services.style_engine import get_writing_prompt, get_visual_suffix, get_audio_params
+from app.services.style_engine import get_writing_prompt, get_scene_split_prompt, get_visual_suffix, get_audio_params
 
 STORAGE_DIR = Path(__file__).parent.parent.parent / "storage"
 
@@ -132,7 +132,7 @@ async def run_pipeline_task(task_id: int):
 def split_scenes_sync(client: StepFunClient, text: str, style: str) -> list:
     """Use LLM to split text into scenes (synchronous)."""
     default_scene = [{"title": "Scene 1", "text": text, "shot_type": "中景", "narration": text, "edit_prompt": text, "instruction": "语气自然"}]
-    style_prompt = get_writing_prompt(style)
+    style_prompt = get_scene_split_prompt(style) or get_writing_prompt(style)
     system_msg = style_prompt if style_prompt else "你是一位专业的编剧。"
 
     messages = [

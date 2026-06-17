@@ -70,3 +70,15 @@ def test_split_scenes_incomplete_scene_uses_safe_defaults():
         "instruction": "语气自然",
         "character": None,
     }]
+
+
+def test_split_scenes_includes_style_scene_split_prompt():
+    mock_client = MagicMock()
+    mock_client.llm_chat.return_value = json.dumps({
+        "scenes": [{"title": "Scene 1", "text": "T", "shot_type": "中景", "narration": "N", "edit_prompt": "P", "instruction": "I"}]
+    }, ensure_ascii=False)
+
+    split_scenes_sync(mock_client, "Some text", "ancient")
+
+    system_message = mock_client.llm_chat.call_args.args[0][0]["content"]
+    assert "请将以下古风文段拆分为 N 个场景" in system_message
