@@ -1,9 +1,10 @@
 """Tests for pipeline scene splitting (with mocked LLM)."""
 
+from types import SimpleNamespace
 import pytest
 import json
 from unittest.mock import MagicMock
-from app.services.pipeline import split_scenes_sync
+from app.services.pipeline import assemble_video, split_scenes_sync
 
 
 def test_split_scenes_json_response():
@@ -82,3 +83,24 @@ def test_split_scenes_includes_style_scene_split_prompt():
 
     system_message = mock_client.llm_chat.call_args.args[0][0]["content"]
     assert "请将以下古风文段拆分为 N 个场景" in system_message
+
+
+@pytest.mark.asyncio
+async def test_assemble_video_raises_when_ffmpeg_segment_fails(tmp_path, monkeypatch):
+    scene = SimpleNamespace(seq=1)
+    (tmp_path / "scene_1.png").write_bytes(b"png")
+    (tmp_path / "scene_1.mp3").write_bytes(b"mp3")
+
+    class FailedProcess:
+        returncode = 1
+
+        async def wait(self):
+            return self.returncode
+
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        return FailedProcess()
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_create_subprocess_exec)
+
+    with pytest.raises(RuntimeError, match="ffmpeg"):
+        await assemble_video(tmp_path, [scene], tmp_path / "final.mp4")
