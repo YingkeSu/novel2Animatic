@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Typography, Progress, Button, Space, Tag, message, Alert } from 'antd'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
@@ -30,6 +30,7 @@ export default function ProjectDetail() {
   const [videoUrl, setVideoUrl] = useState('')
   const [referenceUrl, setReferenceUrl] = useState('')
   const [referenceAsset, setReferenceAsset] = useState(null)
+  const pollIntervalRef = useRef(null)
   const canRun = ['created', 'failed', 'done'].includes(project?.status)
   const isRunning = project?.status === 'running' || (taskProgress && taskProgress.status === 'pending')
   const isDone = project?.status === 'done'
@@ -87,6 +88,17 @@ export default function ProjectDetail() {
     }
   }, [referenceUrl])
 
+  const clearPollInterval = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current)
+      pollIntervalRef.current = null
+    }
+  }
+
+  useEffect(() => () => {
+    clearPollInterval()
+  }, [])
+
   const loadAuthenticatedAssetUrl = async (path, setter) => {
     setAssetLoadingCount((count) => count + 1)
     setAssetError('')
@@ -117,6 +129,8 @@ export default function ProjectDetail() {
       return
     }
 
+    setImageUrl('')
+    setAudioUrl('')
     loadAuthenticatedAssetUrl(`/projects/${id}/scenes/${selectedScene.seq}/image`, setImageUrl)
     loadAuthenticatedAssetUrl(`/projects/${id}/scenes/${selectedScene.seq}/audio`, setAudioUrl)
   }, [id, isDone, selectedScene])
@@ -152,16 +166,17 @@ export default function ProjectDetail() {
   }
 
   const pollProgress = () => {
-    const interval = setInterval(async () => {
+    clearPollInterval()
+    pollIntervalRef.current = setInterval(async () => {
       try {
         const res = await pipeline.progress(id)
         setTaskProgress(res.data)
         if (res.data.status === 'done' || res.data.status === 'failed') {
-          clearInterval(interval)
+          clearPollInterval()
           loadProject()
         }
       } catch (e) {
-        clearInterval(interval)
+        clearPollInterval()
       }
     }, 2000)
   }
@@ -175,7 +190,7 @@ export default function ProjectDetail() {
     : isDone ? PIPELINE_STEPS.length - 1 : -1
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div className="project-detail-page">
       {/* Top toolbar */}
       <div className="app-header">
         <Space>
@@ -221,9 +236,9 @@ export default function ProjectDetail() {
       )}
 
       {/* Main content */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div className="project-detail-main">
         {/* Left: Scene list */}
-        <div style={{ width: 280, background: 'var(--bg-secondary)', borderRight: '1px solid var(--border)', overflowY: 'auto', padding: 16 }}>
+        <div className="project-detail-sidebar">
           <Text style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 12, display: 'block' }}>
             场景列表 ({project.scenes?.length || 0})
           </Text>
@@ -249,7 +264,7 @@ export default function ProjectDetail() {
         </div>
 
         {/* Center: Preview area */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+        <div className="project-detail-preview">
           {assetError && (
             <Alert
               type="warning"
@@ -269,9 +284,9 @@ export default function ProjectDetail() {
           )}
 
           {isDone && selectedScene ? (
-            <div>
+            <div className="project-detail-preview-stack">
               {/* Scene image */}
-              <div className="video-container" style={{ marginBottom: 16 }}>
+              <div className="video-container project-detail-preview-image">
                 <img
                   src={imageUrl}
                   alt={selectedScene.title}
@@ -308,7 +323,7 @@ export default function ProjectDetail() {
               )}
 
               {/* Audio player */}
-              <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: 16 }}>
+              <div className="project-detail-preview-audio">
                 <Text style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 8, display: 'block' }}>🎙️ 旁白音频</Text>
                 <audio
                   controls
@@ -344,12 +359,12 @@ export default function ProjectDetail() {
               <Title level={4} style={{ color: 'var(--text-secondary)' }}>点击右上角"开始生成"</Title>
               <Text style={{ color: 'var(--text-secondary)' }}>AI 将自动拆分场景、生成图片和音频、合成视频</Text>
             </div>
-          )}
+        )}
         </div>
 
         {/* Right: Video player (only when done) */}
         {isDone && (
-          <div style={{ width: 360, background: 'var(--bg-secondary)', borderLeft: '1px solid var(--border)', padding: 16, overflowY: 'auto' }}>
+          <div className="project-detail-video-panel">
             <Text style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 12, display: 'block' }}>🎬 完整视频</Text>
             <div className="video-container">
               <video

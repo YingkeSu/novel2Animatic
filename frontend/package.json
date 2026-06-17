@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "check": "node scripts/check-dashboard-ux.mjs && node scripts/check-create-project-ux.mjs && node scripts/check-asset-auth-ux.mjs && node scripts/check-reference-assets-ux.mjs && vite build",
+    "check": "node scripts/check-dashboard-ux.mjs && node scripts/check-create-project-ux.mjs && node scripts/check-asset-auth-ux.mjs && node scripts/check-reference-assets-ux.mjs && node scripts/check-project-detail-ux.mjs && vite build",
     "docs:check": "node ../scripts/check-readme.mjs"
   },
   "dependencies": {
