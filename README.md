@@ -36,7 +36,7 @@ REDIS_URL=redis://localhost:6379/0
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 EOF
 
-python init_db.py
+alembic upgrade head
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -112,9 +112,11 @@ source .venv/bin/activate
 python -m pytest tests
 ```
 
-Frontend checks:
+Migration and frontend checks:
 
 ```bash
+node scripts/check-alembic.mjs
+
 cd frontend
 npm run check
 npm run docs:check
@@ -134,5 +136,4 @@ npm run docs:check
 
 - Pipeline execution is in-process. A server restart cancels active jobs, and there is no external worker, retry queue, or concurrency control yet.
 - Redis, Celery, SSE, and MinIO are dependencies or architecture targets but are not part of the active pipeline path.
-- There are no Alembic migrations in the current flow; `backend/init_db.py` creates tables from models.
 - Generated asset paths are local filesystem paths, so deployment needs persistent shared storage before scaling beyond one backend instance.
