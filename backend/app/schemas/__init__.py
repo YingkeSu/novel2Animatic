@@ -4,6 +4,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime
 from typing import Optional
 
+from app.services.style_engine import list_styles
+
+AVAILABLE_WRITING_STYLES = {style["name"] for style in list_styles("writing")}
+AVAILABLE_VISUAL_STYLES = {style["name"] for style in list_styles("visual")}
+AVAILABLE_AUDIO_STYLES = {style["name"] for style in list_styles("audio")}
+
 
 # Auth
 class RegisterRequest(BaseModel):
@@ -44,6 +50,27 @@ class ProjectCreate(BaseModel):
         if len(v.strip()) < 5:
             raise ValueError("文段至少需要5个字符")
         return v.strip()
+
+    @field_validator("style_writing")
+    @classmethod
+    def style_writing_valid(cls, v: str) -> str:
+        if v not in AVAILABLE_WRITING_STYLES:
+            raise ValueError("不支持的写作风格")
+        return v
+
+    @field_validator("style_visual")
+    @classmethod
+    def style_visual_valid(cls, v: str) -> str:
+        if v not in AVAILABLE_VISUAL_STYLES:
+            raise ValueError("不支持的视觉风格")
+        return v
+
+    @field_validator("style_audio")
+    @classmethod
+    def style_audio_valid(cls, v: str) -> str:
+        if v not in AVAILABLE_AUDIO_STYLES:
+            raise ValueError("不支持的音频风格")
+        return v
 
 
 class ProjectResponse(BaseModel):
