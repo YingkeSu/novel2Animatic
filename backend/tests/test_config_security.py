@@ -12,3 +12,13 @@ def test_settings_require_secret_and_stepfun_keys(monkeypatch):
 
     with pytest.raises(ValidationError):
         Settings()
+
+
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_settings_reject_non_positive_token_expiry(monkeypatch, value):
+    monkeypatch.setenv("SECRET_KEY", "test-secret")
+    monkeypatch.setenv("STEPFUN_API_KEY", "test-stepfun")
+    monkeypatch.setenv("ACCESS_TOKEN_EXPIRE_MINUTES", value)
+
+    with pytest.raises(ValidationError):
+        Settings()
