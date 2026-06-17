@@ -1,6 +1,6 @@
 """JWT authentication utilities."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import secrets
@@ -53,7 +53,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def create_access_token(user_id: int, role: str) -> str:
     settings = get_settings()
-    expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return jwt.encode(
         {"sub": str(user_id), "role": role, "exp": expire},
         settings.SECRET_KEY,
