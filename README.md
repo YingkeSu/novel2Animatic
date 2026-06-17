@@ -77,7 +77,7 @@ Common optional/defaulted settings:
 - `REDIS_URL`: defaults to `redis://localhost:6379/0`; currently reserved for planned worker/progress infrastructure.
 - `STEPFUN_BASE_URL`: defaults to `https://api.stepfun.com/step_plan/v1`.
 - `ALGORITHM`: defaults to `HS256`.
-- `ACCESS_TOKEN_EXPIRE_MINUTES`: defaults to `15`.
+- `ACCESS_TOKEN_EXPIRE_MINUTES`: defaults to `15`; must be a positive integer.
 - `CORS_ALLOWED_ORIGINS`: comma-separated list accepted by the settings parser. Defaults include localhost/127.0.0.1 on ports `3000` and `5173`, plus `http://test` for tests.
 
 `backend/app/config.py` loads `.env` via Pydantic settings. When following the backend quick start, place `.env` in `backend/`.
@@ -159,7 +159,7 @@ Backend feature changes should include or update the matching pytest coverage an
 - `SECRET_KEY` and `STEPFUN_API_KEY` are required at runtime and must not be committed.
 - CORS rejects origins outside `CORS_ALLOWED_ORIGINS`; keep production origins explicit.
 - Project, progress, and asset routes enforce user ownership. Asset routes remain authenticated, and browser previews load media through authenticated blob URLs.
-- Passwords are stored as hashes, and access tokens expire according to `ACCESS_TOKEN_EXPIRE_MINUTES`.
+- Passwords are stored as hashes, and access tokens expire according to the positive-integer `ACCESS_TOKEN_EXPIRE_MINUTES` setting.
 - Style plugin loading rejects path traversal and only reads single-component YAML names from the configured styles directory.
 
 ## Known Limitations
