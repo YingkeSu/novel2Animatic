@@ -7,6 +7,7 @@ import { projects, styles as stylesApi } from '../services/api'
 const { Title, Text } = Typography
 const { TextArea } = Input
 const minimumSceneTextLength = 80
+const maximumProjectTitleLength = 255
 
 const fallbackStyleDescriptions = {
   modern: '语言更清晰直接，适合把小说段落整理成节奏明确的分镜文本。',
@@ -111,8 +112,20 @@ export default function CreateProject() {
           onFinish={handleSubmit}
           initialValues={{ style_writing: 'modern', style_visual: 'ink_wash', style_audio: 'ancient_male' }}
         >
-          <Form.Item name="title" label="项目标题" rules={[{ required: true, message: '请输入标题' }]}>
-            <Input placeholder="例如：斗破苍穹 - 三年之约" size="large" />
+          <Form.Item
+            name="title"
+            label="项目标题"
+            rules={[
+              { required: true, message: '请输入标题' },
+              { max: maximumProjectTitleLength, message: `标题不能超过 ${maximumProjectTitleLength} 个字符` },
+            ]}
+          >
+            <Input
+              placeholder="例如：斗破苍穹 - 三年之约"
+              size="large"
+              maxLength={maximumProjectTitleLength}
+              showCount
+            />
           </Form.Item>
 
           <Form.Item name="source_text" label="输入文段" rules={[{ required: true, message: '请输入文段' }]}>

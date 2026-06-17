@@ -57,9 +57,12 @@ class ProjectCreate(BaseModel):
     @field_validator("title")
     @classmethod
     def title_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
+        title = v.strip() if v else ""
+        if not title:
             raise ValueError("标题不能为空")
-        return v.strip()
+        if len(title) > 255:
+            raise ValueError("标题不能超过255个字符")
+        return title
 
     @field_validator("source_text")
     @classmethod
