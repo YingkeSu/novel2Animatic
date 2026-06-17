@@ -90,6 +90,8 @@ Style plugins are YAML files loaded safely from `backend/styles`:
 - `visual/*.yaml`: prompt suffixes for image generation.
 - `audio/*.yaml`: TTS voice, instruction, speed, and volume.
 
+Project source text must contain at least `80 个字符` after trimming before scene splitting; the frontend and backend both enforce this minimum so the pipeline can split scenes stably.
+
 Current pipeline flow:
 
 1. Split source text into scenes with StepFun `step-3.7-flash`; invalid or empty JSON falls back to one safe scene.

@@ -28,6 +28,7 @@ if (missing.length > 0) {
 
 const requiredSnippets = [
   'authenticated blob URLs',
+  '80 个字符',
 ]
 
 const missingSnippets = requiredSnippets.filter((snippet) => !readme.includes(snippet))
