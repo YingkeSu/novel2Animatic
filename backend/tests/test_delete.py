@@ -1,7 +1,12 @@
 """Tests for project delete."""
 
+from pathlib import Path
+
 import pytest
 from httpx import AsyncClient
+from jose import jwt
+
+from app.config import get_settings
 
 
 async def register_and_get_token(client: AsyncClient, email: str) -> str:
@@ -50,3 +55,28 @@ async def test_delete_other_user_project_forbidden(client: AsyncClient):
     token_b = await register_and_get_token(client, "del3b@example.com")
     r = await client.delete(f"/api/projects/{pid}", headers={"Authorization": f"Bearer {token_b}"})
     assert r.status_code == 404  # not found for B
+
+
+@pytest.mark.asyncio
+async def test_delete_project_removes_storage_files(client: AsyncClient):
+    token = await register_and_get_token(client, "del4@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    r = await client.post("/api/projects", json={
+        "title": "With Files",
+        "source_text": "武松打虎是一段很长的故事文本用来测试验证。",
+    }, headers=headers)
+    pid = r.json()["id"]
+    payload = jwt.decode(token, get_settings().SECRET_KEY, algorithms=[get_settings().ALGORITHM])
+    user_id = payload["sub"]
+
+    storage_dir = Path("backend/storage")
+    project_dir = storage_dir / str(user_id) / str(pid)
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "scene_1.png").write_bytes(b"png")
+    (project_dir / "scene_1.mp3").write_bytes(b"mp3")
+    (project_dir / "final.mp4").write_bytes(b"mp4")
+
+    r = await client.delete(f"/api/projects/{pid}", headers=headers)
+    assert r.status_code == 200
+    assert not project_dir.exists()
