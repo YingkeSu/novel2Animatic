@@ -87,6 +87,7 @@ async def get_project(
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    project.scenes.sort(key=lambda scene: scene.seq)
     return project
 
 
