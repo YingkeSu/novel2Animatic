@@ -1,8 +1,12 @@
 """Tests for projects endpoints."""
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from httpx import AsyncClient
+from jose import jwt
 
+from app.config import get_settings
 from app.models.project import Project
 from app.models.scene import Scene
 from app.models.task import Task
@@ -189,3 +193,22 @@ async def test_get_project_detail_includes_scene_prompt_fields(client: AsyncClie
 async def test_unauthorized(client: AsyncClient):
     response = await client.get("/api/projects")
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_projects_rejects_signed_token_with_non_integer_sub(client: AsyncClient):
+    settings = get_settings()
+    token = jwt.encode(
+        {
+            "sub": "not-an-integer",
+            "role": "user",
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+        },
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM,
+    )
+
+    response = await client.get("/api/projects", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid token"
