@@ -36,6 +36,7 @@ export default function ProjectDetail() {
   const canRun = ['created', 'failed', 'done'].includes(project?.status)
   const isRunning = project?.status === 'running' || (taskProgress && taskProgress.status === 'pending')
   const isDone = project?.status === 'done'
+  const pipelineFailure = project?.status === 'failed'
   const assetLoading = assetLoadingCount > 0
 
   useEffect(() => {
@@ -60,6 +61,14 @@ export default function ProjectDetail() {
       setProject(res.data)
       if (res.data.scenes?.length > 0 && !selectedScene) {
         setSelectedScene(res.data.scenes[0])
+      }
+      if (res.data.status === 'failed') {
+        try {
+          const progress = await pipeline.progress(id)
+          setTaskProgress(progress.data)
+        } catch {
+          setTaskProgress(null)
+        }
       }
     } catch (e) {
       console.error(e)
@@ -251,6 +260,7 @@ export default function ProjectDetail() {
   const currentStepIndex = taskProgress
     ? PIPELINE_STEPS.findIndex(s => s.key === taskProgress.step)
     : isDone ? PIPELINE_STEPS.length - 1 : -1
+  const pipelineFailureMessage = taskProgress?.error_msg || project.error_msg || 'Pipeline 执行失败，请重试生成。'
 
   return (
     <div className="project-detail-page">
@@ -260,7 +270,7 @@ export default function ProjectDetail() {
           <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/')} style={{ color: 'var(--text-secondary)' }} />
           <Title level={3} style={{ margin: 0, color: '#fff' }}>{project.title}</Title>
           <span className={`status-badge ${project.status}`}>
-            {isRunning ? '⏳ 生成中' : isDone ? '✅ 已完成' : project.status === 'failed' ? '❌ 失败' : '📝 待生成'}
+            {isRunning ? '⏳ 生成中' : isDone ? '✅ 已完成' : pipelineFailure ? '❌ 失败' : '📝 待生成'}
           </span>
         </Space>
         <Space>
@@ -281,7 +291,7 @@ export default function ProjectDetail() {
       </div>
 
       {/* Step progress bar */}
-      {(isRunning || isDone || project.status === 'failed') && (
+      {(isRunning || isDone || pipelineFailure) && (
         <div className="step-progress">
           {PIPELINE_STEPS.map((step, i) => (
             <React.Fragment key={step.key}>
@@ -415,6 +425,29 @@ export default function ProjectDetail() {
               <Text style={{ color: 'var(--text-secondary)' }}>
                 {taskProgress?.progress || 0}% 完成
               </Text>
+            </div>
+          ) : pipelineFailure ? (
+            <div className="project-detail-failure">
+              <div className="project-detail-failure-icon" aria-hidden="true">!</div>
+              <Title level={4} className="project-detail-failure-title">
+                Pipeline 生成失败
+              </Title>
+              <Paragraph className="project-detail-failure-message">
+                {pipelineFailureMessage}
+              </Paragraph>
+              <Space wrap>
+                <Button
+                  type="primary"
+                  icon={<ReloadOutlined />}
+                  loading={loading}
+                  onClick={handleRun}
+                >
+                  重试生成
+                </Button>
+                <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/')}>
+                  返回项目列表
+                </Button>
+              </Space>
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: 60 }}>
