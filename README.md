@@ -135,6 +135,5 @@ npm run docs:check
 - Pipeline execution is in-process. A server restart cancels active jobs, and there is no external worker, retry queue, or concurrency control yet.
 - Redis, Celery, SSE, and MinIO are dependencies or architecture targets but are not part of the active pipeline path.
 - Character reference generation is represented as a progress step but currently does not create reference images.
-- Project deletion removes database rows but does not remove generated files from `backend/storage`.
 - There are no Alembic migrations in the current flow; `backend/init_db.py` creates tables from models.
 - Generated asset paths are local filesystem paths, so deployment needs persistent shared storage before scaling beyond one backend instance.
