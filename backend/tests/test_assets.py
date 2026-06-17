@@ -140,6 +140,52 @@ async def test_video_asset_accepts_authorization_header(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_video_asset_accepts_bearer_token_with_extra_whitespace(client: AsyncClient):
+    token = await register_and_get_token(client, "asset-bearer-whitespace@example.com")
+    create_resp = await client.post(
+        "/api/projects",
+        json={
+            "title": "Asset Bearer Whitespace",
+            "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    project_id = create_resp.json()["id"]
+
+    response = await client.get(
+        f"/api/projects/{project_id}/video",
+        headers={"Authorization": f"Bearer   {token}  "},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Video not found"
+
+
+@pytest.mark.asyncio
+async def test_video_asset_rejects_invalid_authorization_scheme(client: AsyncClient):
+    token = await register_and_get_token(client, "asset-invalid-scheme@example.com")
+
+    response = await client.get(
+        "/api/projects/1/video",
+        headers={"Authorization": f"Basic {token}"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid token"
+
+
+@pytest.mark.asyncio
+async def test_video_asset_rejects_empty_bearer_token(client: AsyncClient):
+    response = await client.get(
+        "/api/projects/1/video",
+        headers={"Authorization": "Bearer   "},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid token"
+
+
+@pytest.mark.asyncio
 async def test_video_asset_serves_latest_record_when_duplicates_exist(
     client: AsyncClient,
     db_session_factory,
