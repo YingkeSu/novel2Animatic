@@ -124,6 +124,34 @@ npm run docs:check
 
 `npm run check` runs the dashboard UX check and a Vite production build. `npm run docs:check` verifies this README contains required top-level sections.
 
+## 开发循环
+
+Use the same local services as quick start, then run focused checks before handing off changes:
+
+```bash
+docker compose up -d postgres redis
+
+cd backend
+source .venv/bin/activate
+python -m pytest tests
+node scripts/check-alembic.mjs
+
+cd ../frontend
+npm run check
+npm run docs:check
+```
+
+Backend feature changes should include or update the matching pytest coverage and pass the Alembic check when models or migrations change. Frontend changes should pass `npm run check`; README or runbook changes should pass `npm run docs:check`. For pipeline work, also verify the required local tools and StepFun credentials from quick start before starting a generation job.
+
+## 故障排查
+
+- PostgreSQL tests: ensure the Compose PostgreSQL service is running and create `novel2animatic_test` before `python -m pytest tests`. If `createdb` fails because the database already exists, reuse it or drop/recreate it intentionally.
+- Missing env: backend runtime requires `backend/.env` with at least `SECRET_KEY` and `STEPFUN_API_KEY`. Keep `DATABASE_URL` aligned with the local PostgreSQL user, password, host, and database.
+- `ffmpeg`: video assembly requires `ffmpeg` on `PATH`. If pipeline jobs reach video assembly and fail, run `ffmpeg -version` from the same shell that starts `uvicorn`.
+- StepFun API: invalid, missing, or quota-limited `STEPFUN_API_KEY` can fail scene splitting, image generation, or TTS. `STEPFUN_BASE_URL` defaults to the StepFun endpoint listed above; only override it when testing against a compatible API.
+- Vite proxy/API connection: the frontend expects the backend at `http://localhost:8000` for `/api` during local dev. Start `uvicorn` first, check `/health`, and keep `CORS_ALLOWED_ORIGINS` including the Vite origin you use.
+- Local generated assets: generated files are stored under `backend/storage/{user_id}/{project_id}/` and served only through authenticated project asset routes. Asset records pointing outside the storage root are rejected, and browser media previews use query tokens because media tags cannot send `Authorization` headers.
+
 ## Security Notes
 
 - `SECRET_KEY` and `STEPFUN_API_KEY` are required at runtime and must not be committed.
