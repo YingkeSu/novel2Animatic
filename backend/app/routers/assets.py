@@ -65,9 +65,11 @@ async def get_video(
         raise HTTPException(status_code=404, detail="Project not found")
 
     result = await db.execute(
-        select(Asset).where(Asset.project_id == project_id, Asset.type == "video")
+        select(Asset)
+        .where(Asset.project_id == project_id, Asset.type == "video")
+        .order_by(Asset.created_at.desc(), Asset.id.desc())
     )
-    asset = result.scalar_one_or_none()
+    asset = result.scalars().first()
     if not asset:
         raise HTTPException(status_code=404, detail="Video not found")
 
@@ -90,9 +92,11 @@ async def get_reference(
         raise HTTPException(status_code=404, detail="Project not found")
 
     result = await db.execute(
-        select(Asset).where(Asset.project_id == project_id, Asset.type == "reference")
+        select(Asset)
+        .where(Asset.project_id == project_id, Asset.type == "reference")
+        .order_by(Asset.created_at.desc(), Asset.id.desc())
     )
-    asset = result.scalar_one_or_none()
+    asset = result.scalars().first()
     if not asset:
         raise HTTPException(status_code=404, detail="Reference image not found")
 
@@ -131,9 +135,9 @@ async def get_scene_file(
             Asset.project_id == project_id,
             Asset.scene_id == scene.id,
             Asset.type == file_type,
-        )
+        ).order_by(Asset.created_at.desc(), Asset.id.desc())
     )
-    asset = result.scalar_one_or_none()
+    asset = result.scalars().first()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
