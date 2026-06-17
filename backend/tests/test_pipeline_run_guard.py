@@ -1,7 +1,5 @@
 """Tests for pipeline run guard behavior."""
 
-from pathlib import Path
-
 import pytest
 from httpx import AsyncClient
 from jose import jwt
@@ -63,7 +61,6 @@ async def test_run_allows_retry_after_terminal_task_state(client: AsyncClient, d
         return None
 
     monkeypatch.setattr("app.tasks.pipeline.run_pipeline_task", fake_run_pipeline_task)
-    monkeypatch.setattr("backend.app.routers.pipeline.run_pipeline_task", fake_run_pipeline_task, raising=False)
 
     response = await client.post(
         f"/api/projects/{project_id}/run",
@@ -75,7 +72,8 @@ async def test_run_allows_retry_after_terminal_task_state(client: AsyncClient, d
 
 
 @pytest.mark.asyncio
-async def test_run_retry_removes_previous_storage_files(client: AsyncClient, db_session_factory, monkeypatch):
+async def test_run_retry_removes_previous_storage_files(client: AsyncClient, db_session_factory, monkeypatch, tmp_path):
+    monkeypatch.setattr("app.routers.pipeline.STORAGE_DIR", tmp_path)
     token = await register_and_get_token(client, "run-retry-storage@example.com")
     create_resp = await client.post(
         "/api/projects",
@@ -94,7 +92,7 @@ async def test_run_retry_removes_previous_storage_files(client: AsyncClient, db_
         await db.commit()
 
     payload = jwt.decode(token, get_settings().SECRET_KEY, algorithms=[get_settings().ALGORITHM])
-    project_dir = Path("backend/storage") / payload["sub"] / str(project_id)
+    project_dir = tmp_path / payload["sub"] / str(project_id)
     project_dir.mkdir(parents=True, exist_ok=True)
     stale_file = project_dir / "scene_1.png"
     stale_file.write_bytes(b"old image")
@@ -103,7 +101,6 @@ async def test_run_retry_removes_previous_storage_files(client: AsyncClient, db_
         return None
 
     monkeypatch.setattr("app.tasks.pipeline.run_pipeline_task", fake_run_pipeline_task)
-    monkeypatch.setattr("backend.app.routers.pipeline.run_pipeline_task", fake_run_pipeline_task, raising=False)
 
     response = await client.post(
         f"/api/projects/{project_id}/run",

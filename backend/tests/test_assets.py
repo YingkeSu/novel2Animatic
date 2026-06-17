@@ -6,6 +6,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.models.asset import Asset
+from app.models.scene import Scene
 from tests.test_projects import register_and_get_token
 
 
@@ -13,7 +14,10 @@ from tests.test_projects import register_and_get_token
 async def test_reference_asset_downloads_with_authorization_header(
     client: AsyncClient,
     db_session_factory,
+    tmp_path,
+    monkeypatch,
 ):
+    monkeypatch.setattr("app.routers.assets.STORAGE_DIR", tmp_path)
     token = await register_and_get_token(client, "asset-reference@example.com")
     create_resp = await client.post(
         "/api/projects",
@@ -24,7 +28,7 @@ async def test_reference_asset_downloads_with_authorization_header(
         headers={"Authorization": f"Bearer {token}"},
     )
     project_id = create_resp.json()["id"]
-    reference_path = Path("backend/storage") / "test-assets" / str(project_id) / "reference.png"
+    reference_path = tmp_path / "test-assets" / str(project_id) / "reference.png"
     reference_path.parent.mkdir(parents=True, exist_ok=True)
     reference_path.write_bytes(b"reference")
 
@@ -187,3 +191,67 @@ async def test_scene_asset_invalid_file_type_still_bad_request(client: AsyncClie
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Invalid file type"
+
+
+@pytest.mark.asyncio
+async def test_scene_asset_must_belong_to_requested_project(
+    client: AsyncClient,
+    db_session_factory,
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setattr("app.routers.assets.STORAGE_DIR", tmp_path)
+    token = await register_and_get_token(client, "asset-scene-scope@example.com")
+    first_resp = await client.post(
+        "/api/projects",
+        json={
+            "title": "First Project",
+            "source_text": "这是一段足够长的测试文本，用来创建第一个项目并验证场景资产归属。",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    second_resp = await client.post(
+        "/api/projects",
+        json={
+            "title": "Second Project",
+            "source_text": "这是一段足够长的测试文本，用来创建第二个项目并验证场景资产归属。",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    first_project_id = first_resp.json()["id"]
+    second_project_id = second_resp.json()["id"]
+    image_path = tmp_path / "test-assets" / str(first_project_id) / "scene_1.png"
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(b"first-project-image")
+
+    async with db_session_factory() as db:
+        first_scene = Scene(
+            project_id=first_project_id,
+            seq=1,
+            title="First scene",
+            text="Scene text",
+            shot_type="中景",
+            narration="Narration",
+            edit_prompt="Prompt",
+            instruction="语气自然",
+        )
+        db.add(first_scene)
+        await db.flush()
+        db.add(
+            Asset(
+                project_id=second_project_id,
+                scene_id=first_scene.id,
+                type="image",
+                file_path=str(image_path),
+                file_size=len(b"first-project-image"),
+            )
+        )
+        await db.commit()
+
+    response = await client.get(
+        f"/api/projects/{first_project_id}/scenes/1/image",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Asset not found"
