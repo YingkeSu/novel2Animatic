@@ -1,6 +1,9 @@
 """Pipeline router - trigger and monitor pipeline execution."""
 
 import asyncio
+import shutil
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +19,7 @@ from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/api/projects", tags=["pipeline"])
 TERMINAL_TASK_STATUSES = {"done", "failed"}
+STORAGE_DIR = Path(__file__).parent.parent.parent / "storage"
 
 
 @router.post("/{project_id}/run")
@@ -45,6 +49,7 @@ async def run_pipeline(
     if latest_task and latest_task.status in TERMINAL_TASK_STATUSES:
         await db.execute(delete(Asset).where(Asset.project_id == project_id))
         await db.execute(delete(Scene).where(Scene.project_id == project_id))
+        shutil.rmtree(STORAGE_DIR / str(user.id) / str(project_id), ignore_errors=True)
         await db.commit()
 
     task = Task(project_id=project_id, user_id=user.id, status="pending", step="queued", progress=0)
