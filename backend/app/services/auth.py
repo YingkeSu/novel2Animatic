@@ -69,7 +69,7 @@ async def get_current_user(
     try:
         payload = jwt.decode(credentials.credentials, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id = int(payload["sub"])
-    except (JWTError, KeyError):
+    except (JWTError, KeyError, TypeError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     result = await db.execute(select(User).where(User.id == user_id))
