@@ -1,39 +1,96 @@
 """Test configuration and fixtures."""
 
-import asyncio
 import os
+from contextlib import asynccontextmanager
+from uuid import uuid4
+
 import pytest
 import pytest_asyncio
+from fastapi import FastAPI
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from fastapi.middleware.cors import CORSMiddleware
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("STEPFUN_API_KEY", "test-stepfun-api-key")
 
 from app.database import Base, get_db
-from app.main import app
+from app.config import get_settings
+from app.routers import auth, projects, pipeline, styles, assets
 
 TEST_DATABASE_URL = "postgresql+asyncpg://novel2animatic:novel2animatic@localhost:5432/novel2animatic_test"
 
 
+def _quote_identifier(identifier: str) -> str:
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def _build_test_app() -> FastAPI:
+    settings = get_settings()
+    test_app = FastAPI(title="novel2Animatic", version="0.1.0")
+    test_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.CORS_ALLOWED_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    test_app.include_router(auth.router)
+    test_app.include_router(projects.router)
+    test_app.include_router(pipeline.router)
+    test_app.include_router(styles.router)
+    test_app.include_router(assets.router)
+
+    @test_app.get("/health")
+    async def health():
+        return {"status": "ok"}
+
+    return test_app
+
+
+@pytest.fixture
+def client_factory():
+    @asynccontextmanager
+    async def make_client():
+        schema_name = f"test_{uuid4().hex}"
+        quoted_schema = _quote_identifier(schema_name)
+        engine = create_async_engine(
+            TEST_DATABASE_URL,
+            echo=False,
+            connect_args={"server_settings": {"search_path": schema_name}},
+        )
+        test_app = _build_test_app()
+        session_factory = async_sessionmaker(
+            engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+
+        async def override_get_db():
+            async with session_factory() as session:
+                yield session
+
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text(f"CREATE SCHEMA {quoted_schema}"))
+                await conn.execute(text(f"SET search_path TO {quoted_schema}"))
+                await conn.run_sync(Base.metadata.create_all)
+
+            test_app.dependency_overrides[get_db] = override_get_db
+            transport = ASGITransport(app=test_app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                yield ac
+        finally:
+            test_app.dependency_overrides.clear()
+            async with engine.begin() as conn:
+                await conn.execute(text(f"DROP SCHEMA IF EXISTS {quoted_schema} CASCADE"))
+            await engine.dispose()
+
+    return make_client
+
+
 @pytest_asyncio.fixture
-async def client():
-    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-    async def override_get_db():
-        async with session_factory() as session:
-            yield session
-
-    app.dependency_overrides[get_db] = override_get_db
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+async def client(client_factory):
+    async with client_factory() as ac:
         yield ac
-
-    app.dependency_overrides.clear()
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
