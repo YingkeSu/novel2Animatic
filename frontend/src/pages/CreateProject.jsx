@@ -25,6 +25,22 @@ const getStyleDescription = (style) => (
   style?.description || fallbackStyleDescriptions[style?.name] || '使用该风格生成分镜、画面提示和音频方向。'
 )
 
+const validateSourceTextLength = (_, value) => {
+  const sourceText = (value || '').trim()
+  if (!sourceText) {
+    return Promise.resolve()
+  }
+  if (sourceText.length < minimumSceneTextLength) {
+    return Promise.reject(new Error(`文段至少需要 ${minimumSceneTextLength} 个字符，才能生成稳定的场景拆分`))
+  }
+  return Promise.resolve()
+}
+
+const sourceTextRules = [
+  { required: true, whitespace: true, message: '请输入文段' },
+  { validator: validateSourceTextLength },
+]
+
 export default function CreateProject() {
   const navigate = useNavigate()
   const [form] = Form.useForm()
@@ -75,11 +91,6 @@ export default function CreateProject() {
   }, [])
 
   const handleSubmit = async (values) => {
-    if ((values.source_text || '').trim().length < minimumSceneTextLength) {
-      message.warning(`文段至少需要 ${minimumSceneTextLength} 个字符，才能生成稳定的场景拆分`)
-      return
-    }
-
     setLoading(true)
     try {
       const res = await projects.create(values)
@@ -128,7 +139,7 @@ export default function CreateProject() {
             />
           </Form.Item>
 
-          <Form.Item name="source_text" label="输入文段" rules={[{ required: true, message: '请输入文段' }]}>
+          <Form.Item name="source_text" label="输入文段" rules={sourceTextRules}>
             <TextArea
               rows={10}
               placeholder={'粘贴你的小说/文段内容...\n\n支持直接粘贴小说片段，AI 会自动拆分为多个场景'}
