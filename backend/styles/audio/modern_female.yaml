@@ -1,0 +1,6 @@
+name: 现代女声
+description: 清新现代女声旁白
+voice: cixingnansheng
+default_instruction: "语气清新自然，语调柔和，适合讲现代故事"
+speed: 1.1
+volume: 1.0

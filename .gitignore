@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+
+# Environment and local runtime
+.env
+.env.*
+!.env.example
+*.log
+
+# Generated media and local outputs
+backend/storage/
+prototype_output/
+prototype_output_doupo/
+prototype_output_doupo_v2/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

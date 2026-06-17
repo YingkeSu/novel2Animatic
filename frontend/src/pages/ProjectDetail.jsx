@@ -1,0 +1,274 @@
+import React, { useEffect, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { Typography, Progress, Button, Space, Tag, message } from 'antd'
+import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
+import { projects, pipeline, styles as stylesApi } from '../services/api'
+
+const { Title, Text, Paragraph } = Typography
+
+const API_BASE = '/api'
+
+const PIPELINE_STEPS = [
+  { key: 'split_scenes', label: '拆分场景', icon: '📝' },
+  { key: 'generate_refs', label: '角色参考', icon: '👤' },
+  { key: 'generate_images', label: '生成图片', icon: '🎨' },
+  { key: 'generate_audio', label: '生成音频', icon: '🎙️' },
+  { key: 'assemble_video', label: '合成视频', icon: '🎬' },
+  { key: 'complete', label: '完成', icon: '✅' },
+]
+
+export default function ProjectDetail() {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const [project, setProject] = useState(null)
+  const [taskProgress, setTaskProgress] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [styleMap, setStyleMap] = useState({})
+  const [selectedScene, setSelectedScene] = useState(null)
+  const token = localStorage.getItem('token')
+
+  useEffect(() => {
+    Promise.all([
+      stylesApi.list('writing'),
+      stylesApi.list('visual'),
+      stylesApi.list('audio'),
+    ]).then(([w, v, a]) => {
+      const map = {}
+      w.data.forEach(s => { map[s.name] = s.display })
+      v.data.forEach(s => { map[s.name] = s.display })
+      a.data.forEach(s => { map[s.name] = s.display })
+      setStyleMap(map)
+    }).catch(() => {})
+  }, [])
+
+  const loadProject = async () => {
+    try {
+      const res = await projects.get(id)
+      setProject(res.data)
+      if (res.data.scenes?.length > 0 && !selectedScene) {
+        setSelectedScene(res.data.scenes[0])
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  useEffect(() => { loadProject() }, [id])
+
+  const handleRun = async () => {
+    setLoading(true)
+    try {
+      await pipeline.run(id)
+      message.success('Pipeline 已启动')
+      pollProgress()
+    } catch (e) {
+      message.error(e.response?.data?.detail || '启动失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const pollProgress = () => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await pipeline.progress(id)
+        setTaskProgress(res.data)
+        if (res.data.status === 'done' || res.data.status === 'failed') {
+          clearInterval(interval)
+          loadProject()
+        }
+      } catch (e) {
+        clearInterval(interval)
+      }
+    }, 2000)
+  }
+
+  if (!project) return null
+
+  const canRun = ['created', 'failed', 'done'].includes(project.status)
+  const isRunning = project.status === 'running' || (taskProgress && taskProgress.status === 'pending')
+  const isDone = project.status === 'done'
+  const displayName = (key) => styleMap[key] || key
+  const assetUrl = (path) => `${API_BASE}${path}?token=${token}`
+
+  const currentStepIndex = taskProgress
+    ? PIPELINE_STEPS.findIndex(s => s.key === taskProgress.step)
+    : isDone ? PIPELINE_STEPS.length - 1 : -1
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      {/* Top toolbar */}
+      <div className="app-header">
+        <Space>
+          <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/')} style={{ color: 'var(--text-secondary)' }} />
+          <Title level={3} style={{ margin: 0, color: '#fff' }}>{project.title}</Title>
+          <span className={`status-badge ${project.status}`}>
+            {isRunning ? '⏳ 生成中' : isDone ? '✅ 已完成' : project.status === 'failed' ? '❌ 失败' : '📝 待生成'}
+          </span>
+        </Space>
+        <Space>
+          <Tag color="purple">{displayName(project.style_writing)}</Tag>
+          <Tag color="cyan">{displayName(project.style_visual)}</Tag>
+          <Tag color="orange">{displayName(project.style_audio)}</Tag>
+          {canRun && (
+            <Button
+              type="primary"
+              icon={<ReloadOutlined />}
+              loading={loading}
+              onClick={handleRun}
+            >
+              {project.status === 'created' ? '开始生成' : '重新生成'}
+            </Button>
+          )}
+        </Space>
+      </div>
+
+      {/* Step progress bar */}
+      {(isRunning || isDone || project.status === 'failed') && (
+        <div className="step-progress">
+          {PIPELINE_STEPS.map((step, i) => (
+            <React.Fragment key={step.key}>
+              <div className={`step-item ${i < currentStepIndex ? 'completed' : i === currentStepIndex ? 'active' : ''}`}>
+                <span>{step.icon}</span>
+                <span>{step.label}</span>
+                {taskProgress?.status === 'failed' && i === currentStepIndex && <span>❌</span>}
+              </div>
+              {i < PIPELINE_STEPS.length - 1 && (
+                <div className={`step-connector ${i < currentStepIndex ? 'completed' : ''}`} />
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+
+      {/* Main content */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* Left: Scene list */}
+        <div style={{ width: 280, background: 'var(--bg-secondary)', borderRight: '1px solid var(--border)', overflowY: 'auto', padding: 16 }}>
+          <Text style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 12, display: 'block' }}>
+            场景列表 ({project.scenes?.length || 0})
+          </Text>
+          {project.scenes?.map(scene => (
+            <div
+              key={scene.id}
+              className={`scene-card ${selectedScene?.id === scene.id ? 'selected' : ''}`}
+              style={{ marginBottom: 8, padding: 12 }}
+              onClick={() => setSelectedScene(scene)}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>Scene {scene.seq}</Text>
+                <Tag style={{ fontSize: 11, margin: 0 }}>{scene.shot_type}</Tag>
+              </div>
+              <Text style={{ color: 'var(--text-secondary)', fontSize: 12 }} ellipsis>
+                {scene.title}
+              </Text>
+              {scene.character && (
+                <Tag color="blue" style={{ fontSize: 11, marginTop: 4 }}>{scene.character}</Tag>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Center: Preview area */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+          {isDone && selectedScene ? (
+            <div>
+              {/* Scene image */}
+              <div className="video-container" style={{ marginBottom: 16 }}>
+                <img
+                  src={assetUrl(`/projects/${id}/scenes/${selectedScene.seq}/image`)}
+                  alt={selectedScene.title}
+                  style={{ width: '100%', maxHeight: 400, objectFit: 'contain', background: '#000' }}
+                />
+              </div>
+
+              {/* Scene info */}
+              <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: 20, marginBottom: 16 }}>
+                <Title level={4} style={{ color: '#fff', marginBottom: 8 }}>{selectedScene.title}</Title>
+                <Space style={{ marginBottom: 12 }}>
+                  <Tag>{selectedScene.shot_type}</Tag>
+                  {selectedScene.character && <Tag color="blue">{selectedScene.character}</Tag>}
+                </Space>
+                <Paragraph style={{ color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.8 }}>
+                  {selectedScene.narration}
+                </Paragraph>
+              </div>
+
+              {/* Audio player */}
+              <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: 16 }}>
+                <Text style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 8, display: 'block' }}>🎙️ 旁白音频</Text>
+                <audio
+                  controls
+                  style={{ width: '100%' }}
+                  src={assetUrl(`/projects/${id}/scenes/${selectedScene.seq}/audio`)}
+                />
+              </div>
+            </div>
+          ) : isDone ? (
+            <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-secondary)' }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>👈</div>
+              <Text>从左侧选择一个场景查看详情</Text>
+            </div>
+          ) : isRunning ? (
+            <div style={{ textAlign: 'center', padding: 60 }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+              <Title level={4} style={{ color: 'var(--text-secondary)' }}>
+                {PIPELINE_STEPS[currentStepIndex]?.label || '处理中'}...
+              </Title>
+              <Progress
+                percent={taskProgress?.progress || 0}
+                strokeColor="var(--accent)"
+                trailColor="var(--bg-card)"
+                style={{ maxWidth: 400, margin: '16px auto' }}
+              />
+              <Text style={{ color: 'var(--text-secondary)' }}>
+                {taskProgress?.progress || 0}% 完成
+              </Text>
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: 60 }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>🎬</div>
+              <Title level={4} style={{ color: 'var(--text-secondary)' }}>点击右上角"开始生成"</Title>
+              <Text style={{ color: 'var(--text-secondary)' }}>AI 将自动拆分场景、生成图片和音频、合成视频</Text>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Video player (only when done) */}
+        {isDone && (
+          <div style={{ width: 360, background: 'var(--bg-secondary)', borderLeft: '1px solid var(--border)', padding: 16, overflowY: 'auto' }}>
+            <Text style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 12, display: 'block' }}>🎬 完整视频</Text>
+            <div className="video-container">
+              <video
+                controls
+                src={assetUrl(`/projects/${id}/video`)}
+              />
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <Text style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 8, display: 'block' }}>📊 项目信息</Text>
+              <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Text style={{ color: 'var(--text-secondary)' }}>场景数</Text>
+                  <Text style={{ color: '#fff' }}>{project.scenes?.length || 0}</Text>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Text style={{ color: 'var(--text-secondary)' }}>文风</Text>
+                  <Text style={{ color: '#fff' }}>{displayName(project.style_writing)}</Text>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Text style={{ color: 'var(--text-secondary)' }}>画风</Text>
+                  <Text style={{ color: '#fff' }}>{displayName(project.style_visual)}</Text>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Text style={{ color: 'var(--text-secondary)' }}>音频</Text>
+                  <Text style={{ color: '#fff' }}>{displayName(project.style_audio)}</Text>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

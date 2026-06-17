@@ -1,0 +1,6 @@
+name: 古风男声
+description: 沉稳古典男声旁白
+voice: cixingnansheng
+default_instruction: "语气沉稳，古韵悠长，适合讲古风故事"
+speed: 0.9
+volume: 1.0
