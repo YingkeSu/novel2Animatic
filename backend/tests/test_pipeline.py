@@ -4,7 +4,14 @@ from types import SimpleNamespace
 import pytest
 import json
 from unittest.mock import MagicMock
-from app.services.pipeline import assemble_video, split_scenes_sync
+from sqlalchemy import select
+
+from app.models.asset import Asset
+from app.models.project import Project
+from app.models.scene import Scene
+from app.models.task import Task
+from app.models.user import User
+from app.services.pipeline import assemble_video, run_pipeline_task, split_scenes_sync
 
 
 def test_split_scenes_json_response():
@@ -104,3 +111,74 @@ async def test_assemble_video_raises_when_ffmpeg_segment_fails(tmp_path, monkeyp
 
     with pytest.raises(RuntimeError, match="ffmpeg"):
         await assemble_video(tmp_path, [scene], tmp_path / "final.mp4")
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_task_cleans_partial_outputs_on_failure(db_session_factory, tmp_path, monkeypatch):
+    class FailingImageClient:
+        def __init__(self):
+            self.image_calls = 0
+
+        def llm_chat(self, messages):
+            return json.dumps({
+                "scenes": [{
+                    "title": "Scene 1",
+                    "text": "Scene text",
+                    "shot_type": "中景",
+                    "narration": "Narration",
+                    "edit_prompt": "Prompt",
+                    "instruction": "语气自然",
+                }]
+            }, ensure_ascii=False)
+
+        def image_generate(self, **kwargs):
+            self.image_calls += 1
+            if self.image_calls > 1:
+                raise RuntimeError("image service failed")
+            return b"reference"
+
+        def tts(self, **kwargs):
+            return b"audio"
+
+    monkeypatch.setattr("app.services.pipeline.StepFunClient", FailingImageClient)
+    monkeypatch.setattr("app.services.pipeline.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("app.services.pipeline.async_session", db_session_factory)
+
+    async with db_session_factory() as db:
+        user = User(email="pipeline-failure@example.com", password_hash="hash")
+        db.add(user)
+        await db.flush()
+        project = Project(
+            user_id=user.id,
+            title="Pipeline Failure",
+            source_text="足够长的文段用于验证 pipeline 失败清理。",
+            style_writing="modern",
+            style_visual="ink_wash",
+            style_audio="ancient_male",
+            status="running",
+        )
+        db.add(project)
+        await db.flush()
+        task = Task(project_id=project.id, user_id=user.id, status="pending", step="queued", progress=0)
+        db.add(task)
+        await db.commit()
+        task_id = task.id
+        project_id = project.id
+        user_id = user.id
+
+    project_dir = tmp_path / str(user_id) / str(project_id)
+
+    await run_pipeline_task(task_id)
+
+    async with db_session_factory() as db:
+        task = await db.get(Task, task_id)
+        project = await db.get(Project, project_id)
+        assets = (await db.execute(select(Asset).where(Asset.project_id == project_id))).scalars().all()
+        scenes = (await db.execute(select(Scene).where(Scene.project_id == project_id))).scalars().all()
+
+    assert task.status == "failed"
+    assert task.error_msg == "image service failed"
+    assert project.status == "failed"
+    assert assets == []
+    assert scenes == []
+    assert not project_dir.exists()
