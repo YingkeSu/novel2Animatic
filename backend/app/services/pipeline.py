@@ -131,7 +131,23 @@ async def run_pipeline_task(task_id: int):
 
 def split_scenes_sync(client: StepFunClient, text: str, style: str) -> list:
     """Use LLM to split text into scenes (synchronous)."""
-    default_scene = [{"title": "Scene 1", "text": text, "shot_type": "中景", "narration": text, "edit_prompt": text, "instruction": "语气自然"}]
+    default_scene = [{"title": "Scene 1", "text": text, "shot_type": "中景", "narration": text, "edit_prompt": text, "instruction": "语气自然", "character": None}]
+
+    def normalize_string(value, default):
+        return value if isinstance(value, str) and value else default
+
+    def normalize_scene(scene, index):
+        character = scene.get("character")
+        return {
+            "title": normalize_string(scene.get("title"), f"Scene {index}"),
+            "text": normalize_string(scene.get("text"), text),
+            "shot_type": normalize_string(scene.get("shot_type"), "中景"),
+            "narration": normalize_string(scene.get("narration"), text),
+            "edit_prompt": normalize_string(scene.get("edit_prompt"), text),
+            "instruction": normalize_string(scene.get("instruction"), "语气自然"),
+            "character": character if isinstance(character, str) and character else None,
+        }
+
     style_prompt = get_scene_split_prompt(style) or get_writing_prompt(style)
     system_msg = style_prompt if style_prompt else "你是一位专业的编剧。"
 
@@ -152,19 +168,19 @@ def split_scenes_sync(client: StepFunClient, text: str, style: str) -> list:
         else:
             json_str = response.strip()
         data = json.loads(json_str)
-        scenes = data.get("scenes") or default_scene
-        return [
-            {
-                **scene,
-                "text": scene.get("text") or text,
-                "shot_type": scene.get("shot_type") or "中景",
-                "narration": scene.get("narration") or text,
-                "edit_prompt": scene.get("edit_prompt") or text,
-                "instruction": scene.get("instruction") or "语气自然",
-                "character": scene.get("character") or None,
-            }
-            for scene in scenes
+        if not isinstance(data, dict):
+            return default_scene
+
+        scenes = data.get("scenes")
+        if not isinstance(scenes, list) or not scenes:
+            return default_scene
+
+        normalized_scenes = [
+            normalize_scene(scene, index)
+            for index, scene in enumerate(scenes, start=1)
+            if isinstance(scene, dict)
         ]
+        return normalized_scenes or default_scene
     except (json.JSONDecodeError, IndexError):
         return default_scene
 
