@@ -5,6 +5,16 @@ import useStore from '../stores/auth'
 
 const { Title, Text } = Typography
 
+const emailRules = [
+  { required: true, message: '请输入邮箱' },
+  { type: 'email', message: '请输入有效的邮箱' },
+]
+
+const passwordRules = [
+  { required: true, message: '请输入密码' },
+  { min: 8, message: '密码至少8位' },
+]
+
 export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false)
   const setToken = useStore((s) => s.setToken)
@@ -30,10 +40,10 @@ export default function Login({ onLogin }) {
       label: '登录',
       children: (
         <Form onFinish={(v) => handleSubmit(v, false)}>
-          <Form.Item name="email" rules={[{ required: true, message: '请输入邮箱' }]}>
+          <Form.Item name="email" rules={emailRules}>
             <Input placeholder="邮箱" size="large" />
           </Form.Item>
-          <Form.Item name="password" rules={[{ required: true, message: '请输入密码' }]}>
+          <Form.Item name="password" rules={passwordRules}>
             <Input.Password placeholder="密码" size="large" />
           </Form.Item>
           <Form.Item>
@@ -47,10 +57,10 @@ export default function Login({ onLogin }) {
       label: '注册',
       children: (
         <Form onFinish={(v) => handleSubmit(v, true)}>
-          <Form.Item name="email" rules={[{ required: true, message: '请输入邮箱' }]}>
+          <Form.Item name="email" rules={emailRules}>
             <Input placeholder="邮箱" size="large" />
           </Form.Item>
-          <Form.Item name="password" rules={[{ required: true, min: 6, message: '密码至少6位' }]}>
+          <Form.Item name="password" rules={passwordRules}>
             <Input.Password placeholder="密码" size="large" />
           </Form.Item>
           <Form.Item>
