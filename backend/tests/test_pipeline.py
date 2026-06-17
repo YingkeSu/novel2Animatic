@@ -182,3 +182,135 @@ async def test_run_pipeline_task_cleans_partial_outputs_on_failure(db_session_fa
     assert assets == []
     assert scenes == []
     assert not project_dir.exists()
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_task_uses_scene_tts_instruction(db_session_factory, tmp_path, monkeypatch):
+    class RecordingClient:
+        tts_instructions = []
+
+        def llm_chat(self, messages):
+            return json.dumps({
+                "scenes": [
+                    {
+                        "title": "Scene 1",
+                        "text": "Scene text 1",
+                        "shot_type": "中景",
+                        "narration": "Narration 1",
+                        "edit_prompt": "Prompt 1",
+                        "instruction": "语气压低，带紧张感",
+                    },
+                    {
+                        "title": "Scene 2",
+                        "text": "Scene text 2",
+                        "shot_type": "近景",
+                        "narration": "Narration 2",
+                        "edit_prompt": "Prompt 2",
+                        "instruction": "语气轻快，略带笑意",
+                    },
+                ]
+            }, ensure_ascii=False)
+
+        def image_generate(self, **kwargs):
+            return b"image"
+
+        def tts(self, **kwargs):
+            self.tts_instructions.append(kwargs["extra_body"]["instruction"])
+            return b"audio"
+
+    async def fake_assemble_video(project_dir, scenes, video_path):
+        video_path.write_bytes(b"video")
+
+    monkeypatch.setattr("app.services.pipeline.StepFunClient", RecordingClient)
+    monkeypatch.setattr("app.services.pipeline.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("app.services.pipeline.async_session", db_session_factory)
+    monkeypatch.setattr("app.services.pipeline.assemble_video", fake_assemble_video)
+
+    async with db_session_factory() as db:
+        user = User(email="pipeline-tts-instruction@example.com", password_hash="hash")
+        db.add(user)
+        await db.flush()
+        project = Project(
+            user_id=user.id,
+            title="Pipeline TTS Instruction",
+            source_text="足够长的文段用于验证每个场景的 TTS 指令。",
+            style_writing="modern",
+            style_visual="ink_wash",
+            style_audio="ancient_male",
+            status="running",
+        )
+        db.add(project)
+        await db.flush()
+        task = Task(project_id=project.id, user_id=user.id, status="pending", step="queued", progress=0)
+        db.add(task)
+        await db.commit()
+        task_id = task.id
+
+    await run_pipeline_task(task_id)
+
+    assert RecordingClient.tts_instructions == [
+        "语气压低，带紧张感",
+        "语气轻快，略带笑意",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_task_falls_back_to_style_tts_instruction_when_scene_instruction_missing(db_session_factory, tmp_path, monkeypatch):
+    class RecordingClient:
+        tts_instructions = []
+
+        def llm_chat(self, messages):
+            raise AssertionError("split_scenes_sync is stubbed for this test")
+
+        def image_generate(self, **kwargs):
+            return b"image"
+
+        def tts(self, **kwargs):
+            self.tts_instructions.append(kwargs["extra_body"]["instruction"])
+            return b"audio"
+
+    async def fake_assemble_video(project_dir, scenes, video_path):
+        video_path.write_bytes(b"video")
+
+    def fake_split_scenes_sync(client, text, style):
+        return [{
+            "title": "Scene 1",
+            "text": "Scene text 1",
+            "shot_type": "中景",
+            "narration": "Narration 1",
+            "edit_prompt": "Prompt 1",
+            "instruction": "",
+            "character": None,
+        }]
+
+    monkeypatch.setattr("app.services.pipeline.StepFunClient", RecordingClient)
+    monkeypatch.setattr("app.services.pipeline.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("app.services.pipeline.async_session", db_session_factory)
+    monkeypatch.setattr("app.services.pipeline.assemble_video", fake_assemble_video)
+    monkeypatch.setattr("app.services.pipeline.split_scenes_sync", fake_split_scenes_sync)
+
+    async with db_session_factory() as db:
+        user = User(email="pipeline-tts-fallback@example.com", password_hash="hash")
+        db.add(user)
+        await db.flush()
+        project = Project(
+            user_id=user.id,
+            title="Pipeline TTS Fallback",
+            source_text="足够长的文段用于验证风格默认 TTS 指令。",
+            style_writing="modern",
+            style_visual="ink_wash",
+            style_audio="ancient_male",
+            status="running",
+        )
+        db.add(project)
+        await db.flush()
+        task = Task(project_id=project.id, user_id=user.id, status="pending", step="queued", progress=0)
+        db.add(task)
+        await db.commit()
+        task_id = task.id
+
+    await run_pipeline_task(task_id)
+
+    assert RecordingClient.tts_instructions == [
+        "语气沉稳，古韵悠长，适合讲古风故事",
+    ]

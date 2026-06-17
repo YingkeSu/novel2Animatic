@@ -149,6 +149,11 @@ async def run_pipeline_task(task_id: int):
 
             audio_params = get_audio_params(project.style_audio)
             for scene in scenes:
+                instruction = (
+                    scene.instruction
+                    if isinstance(scene.instruction, str) and scene.instruction.strip()
+                    else audio_params["instruction"]
+                )
                 audio_data = await asyncio.to_thread(
                     client.tts,
                     text=scene.narration,
@@ -156,7 +161,7 @@ async def run_pipeline_task(task_id: int):
                     extra_body={
                         "volume": audio_params["volume"],
                         "speed": audio_params["speed"],
-                        "instruction": audio_params["instruction"],
+                        "instruction": instruction,
                     },
                 )
                 audio_path = project_dir / f"scene_{scene.seq}.mp3"
