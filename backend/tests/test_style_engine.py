@@ -2,7 +2,7 @@
 
 import pytest
 from app.services.style_engine import (
-    load_style, get_writing_prompt, get_visual_suffix,
+    load_style, get_writing_prompt, get_scene_split_prompt, get_visual_suffix,
     get_audio_params, list_styles
 )
 
@@ -45,6 +45,11 @@ def test_get_writing_prompt():
     prompt = get_writing_prompt("modern")
     assert len(prompt) > 0
     assert "现代" in prompt or "白话" in prompt
+
+
+def test_get_scene_split_prompt():
+    prompt = get_scene_split_prompt("ancient")
+    assert "古风文段拆分为 N 个场景" in prompt
 
 
 def test_get_visual_suffix():
