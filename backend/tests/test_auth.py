@@ -2,6 +2,7 @@
 
 import pytest
 from httpx import AsyncClient
+from app.services.auth import hash_password, verify_password
 
 
 @pytest.mark.asyncio
@@ -54,3 +55,9 @@ async def test_login_wrong_password(client: AsyncClient):
         "password": "wrongpassword"
     })
     assert response.status_code == 401
+
+
+def test_password_hashing_roundtrip():
+    hashed = hash_password("short-password")
+    assert hashed != "short-password"
+    assert verify_password("short-password", hashed) is True

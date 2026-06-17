@@ -1,8 +1,10 @@
 """JWT authentication utilities."""
 
 from datetime import datetime, timedelta
+import hashlib
+import hmac
+import secrets
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select
@@ -12,16 +14,41 @@ from app.config import get_settings
 from app.database import get_db
 from app.models.user import User
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
+_PASSWORD_HASH_ITERATIONS = 600_000
+_PASSWORD_SALT_BYTES = 16
+_PASSWORD_HASH_BYTES = 32
+
 security = HTTPBearer()
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    salt = secrets.token_hex(_PASSWORD_SALT_BYTES)
+    password_hash = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        bytes.fromhex(salt),
+        _PASSWORD_HASH_ITERATIONS,
+        dklen=_PASSWORD_HASH_BYTES,
+    ).hex()
+    return f"{_PASSWORD_HASH_ALGORITHM}${_PASSWORD_HASH_ITERATIONS}${salt}${password_hash}"
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        algorithm, iterations, salt, expected_hash = hashed.split("$", 3)
+        if algorithm != _PASSWORD_HASH_ALGORITHM:
+            return False
+        actual_hash = hashlib.pbkdf2_hmac(
+            "sha256",
+            plain.encode("utf-8"),
+            bytes.fromhex(salt),
+            int(iterations),
+            dklen=len(bytes.fromhex(expected_hash)),
+        ).hex()
+    except (AttributeError, TypeError, ValueError):
+        return False
+    return hmac.compare_digest(actual_hash, expected_hash)
 
 
 def create_access_token(user_id: int, role: str) -> str:
