@@ -34,7 +34,7 @@ export default function ProjectDetail() {
   const [referenceAsset, setReferenceAsset] = useState(null)
   const pollIntervalRef = useRef(null)
   const canRun = ['created', 'failed', 'done'].includes(project?.status)
-  const isRunning = project?.status === 'running' || (taskProgress && taskProgress.status === 'pending')
+  const isRunning = project?.status === 'running' || taskProgress?.status === 'pending'
   const isDone = project?.status === 'done'
   const pipelineFailure = project?.status === 'failed'
   const assetLoading = assetLoadingCount > 0
@@ -53,22 +53,30 @@ export default function ProjectDetail() {
     }).catch(() => {})
   }, [])
 
+  const loadProjectProgress = async () => {
+    try {
+      const progress = await pipeline.progress(id)
+      setTaskProgress(progress.data)
+    } catch {
+      setTaskProgress(null)
+    }
+  }
+
   const loadProject = async () => {
     setDetailLoading(true)
     setDetailError(null)
     try {
       const res = await projects.get(id)
-      setProject(res.data)
-      if (res.data.scenes?.length > 0 && !selectedScene) {
-        setSelectedScene(res.data.scenes[0])
+      const project = res.data
+      setProject(project)
+      if (project.scenes?.length > 0 && !selectedScene) {
+        setSelectedScene(project.scenes[0])
       }
-      if (res.data.status === 'failed') {
-        try {
-          const progress = await pipeline.progress(id)
-          setTaskProgress(progress.data)
-        } catch {
-          setTaskProgress(null)
-        }
+      if (project.status === 'failed' || project.status === 'running') {
+        await loadProjectProgress()
+      }
+      if (project.status === 'running') {
+        pollProgress()
       }
     } catch (e) {
       console.error(e)
