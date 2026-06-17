@@ -17,7 +17,7 @@ async def test_run_rejects_when_pending_task_exists(client: AsyncClient, db_sess
         "/api/projects",
         json={
             "title": "Run Guard",
-            "source_text": "这是一段足够长的测试文本，用来验证 pipeline 单飞保护。",
+            "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -45,7 +45,7 @@ async def test_run_allows_retry_after_terminal_task_state(client: AsyncClient, d
         "/api/projects",
         json={
             "title": "Run Retry",
-            "source_text": "这是一段足够长的测试文本，用来验证 pipeline 重试行为。",
+            "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -79,7 +79,7 @@ async def test_run_retry_removes_previous_storage_files(client: AsyncClient, db_
         "/api/projects",
         json={
             "title": "Run Retry Storage",
-            "source_text": "这是一段足够长的测试文本，用来验证 pipeline 重试会清理旧生成文件。",
+            "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -118,7 +118,7 @@ async def test_progress_returns_newest_task(client: AsyncClient, db_session_fact
         "/api/projects",
         json={
             "title": "Run Progress",
-            "source_text": "这是一段足够长的测试文本，用来验证 progress 返回最新任务。",
+            "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
         },
         headers={"Authorization": f"Bearer {token}"},
     )

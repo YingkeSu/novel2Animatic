@@ -21,7 +21,7 @@ async def test_delete_project(client: AsyncClient):
 
     # Create project
     r = await client.post("/api/projects", json={
-        "title": "To Delete", "source_text": "武松打虎是一段很长的故事文本用来测试验证。"
+        "title": "To Delete", "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉"
     }, headers=headers)
     pid = r.json()["id"]
 
@@ -47,7 +47,7 @@ async def test_delete_other_user_project_forbidden(client: AsyncClient):
     # User A creates project
     token_a = await register_and_get_token(client, "del3a@example.com")
     r = await client.post("/api/projects", json={
-        "title": "A's project", "source_text": "武松打虎是一段很长的故事文本用来测试验证。"
+        "title": "A's project", "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉"
     }, headers={"Authorization": f"Bearer {token_a}"})
     pid = r.json()["id"]
 
@@ -65,7 +65,7 @@ async def test_delete_project_removes_storage_files(client: AsyncClient, tmp_pat
 
     r = await client.post("/api/projects", json={
         "title": "With Files",
-        "source_text": "武松打虎是一段很长的故事文本用来测试验证。",
+        "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
     }, headers=headers)
     pid = r.json()["id"]
     payload = jwt.decode(token, get_settings().SECRET_KEY, algorithms=[get_settings().ALGORITHM])

@@ -23,7 +23,7 @@ async def test_reference_asset_downloads_with_authorization_header(
         "/api/projects",
         json={
             "title": "Asset Reference",
-            "source_text": "这是一段足够长的测试文本，用来创建项目并验证参考图资产接口。",
+            "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -57,7 +57,7 @@ async def test_asset_path_outside_storage_root_is_not_served(
         "/api/projects",
         json={
             "title": "Asset Path Safety",
-            "source_text": "这是一段足够长的测试文本，用来创建项目并验证资产路径安全。",
+            "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -85,7 +85,7 @@ async def test_video_asset_accepts_authorization_header(client: AsyncClient):
         "/api/projects",
         json={
             "title": "Asset Header",
-            "source_text": "这是一段足够长的测试文本，用来创建项目并验证资产接口认证。",
+            "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -107,7 +107,7 @@ async def test_video_asset_accepts_lowercase_bearer_scheme(client: AsyncClient):
         "/api/projects",
         json={
             "title": "Asset Lower Bearer",
-            "source_text": "这是一段足够长的测试文本，用来创建项目并验证资产接口认证。",
+            "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -129,7 +129,7 @@ async def test_video_asset_rejects_query_token(client: AsyncClient):
         "/api/projects",
         json={
             "title": "Asset Query",
-            "source_text": "这是一段足够长的测试文本，用来创建项目并验证资产接口认证。",
+            "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -148,7 +148,7 @@ async def test_video_asset_authorization_header_takes_precedence(client: AsyncCl
         "/api/projects",
         json={
             "title": "Asset Precedence",
-            "source_text": "这是一段足够长的测试文本，用来创建项目并验证资产接口认证。",
+            "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -178,7 +178,7 @@ async def test_scene_asset_invalid_file_type_still_bad_request(client: AsyncClie
         "/api/projects",
         json={
             "title": "Asset Invalid Type",
-            "source_text": "这是一段足够长的测试文本，用来创建项目并验证资产接口认证。",
+            "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -206,7 +206,7 @@ async def test_scene_asset_must_belong_to_requested_project(
         "/api/projects",
         json={
             "title": "First Project",
-            "source_text": "这是一段足够长的测试文本，用来创建第一个项目并验证场景资产归属。",
+            "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -214,7 +214,7 @@ async def test_scene_asset_must_belong_to_requested_project(
         "/api/projects",
         json={
             "title": "Second Project",
-            "source_text": "这是一段足够长的测试文本，用来创建第二个项目并验证场景资产归属。",
+            "source_text": "武松在路上行了几日，来到阳谷县地面。当日晌午，走得肚中饥渴，望见前面有一个酒店。店前挑着一面招旗，上头写着三碗不过冈。武松见了，便入店坐下，叫酒保筛酒来吃。酒肉",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
