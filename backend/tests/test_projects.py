@@ -107,6 +107,37 @@ async def test_get_project_detail_orders_scenes_by_sequence(client: AsyncClient,
 
 
 @pytest.mark.asyncio
+async def test_get_project_detail_includes_scene_prompt_fields(client: AsyncClient, db_session_factory):
+    token = await register_and_get_token(client, "detail-scene-prompts@example.com")
+    create_resp = await client.post("/api/projects", json={
+        "title": "Scene Prompts",
+        "source_text": "武松打虎是一段很长的故事文本用来测试场景提示词展示。",
+    }, headers={"Authorization": f"Bearer {token}"})
+    project_id = create_resp.json()["id"]
+
+    async with db_session_factory() as db:
+        db.add(Scene(
+            project_id=project_id,
+            seq=1,
+            title="景阳冈",
+            text="武松来到景阳冈。",
+            shot_type="远景",
+            narration="武松行至冈上。",
+            edit_prompt="水墨风格，武松立于山冈，远处松林。",
+            instruction="语气沉稳，略带紧张。",
+        ))
+        await db.commit()
+
+    response = await client.get(f"/api/projects/{project_id}", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    [scene] = response.json()["scenes"]
+    assert scene["text"] == "武松来到景阳冈。"
+    assert scene["edit_prompt"] == "水墨风格，武松立于山冈，远处松林。"
+    assert scene["instruction"] == "语气沉稳，略带紧张。"
+
+
+@pytest.mark.asyncio
 async def test_unauthorized(client: AsyncClient):
     response = await client.get("/api/projects")
     assert response.status_code == 401

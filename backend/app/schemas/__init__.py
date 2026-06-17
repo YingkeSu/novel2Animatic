@@ -114,6 +114,8 @@ class SceneResponse(BaseModel):
     text: str
     shot_type: str
     narration: str
+    edit_prompt: str
+    instruction: str
     character: Optional[str] = None
 
 

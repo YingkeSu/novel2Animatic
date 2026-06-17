@@ -379,6 +379,30 @@ export default function ProjectDetail() {
                 </Paragraph>
               </div>
 
+              <div className="project-detail-prompt-panel">
+                <Text className="project-detail-prompt-title">生成依据</Text>
+                <div className="project-detail-prompt-grid">
+                  <div>
+                    <Text className="project-detail-prompt-label">场景原文</Text>
+                    <Paragraph className="project-detail-prompt-copy">
+                      {selectedScene.text}
+                    </Paragraph>
+                  </div>
+                  <div>
+                    <Text className="project-detail-prompt-label">图像提示词</Text>
+                    <Paragraph className="project-detail-prompt-copy">
+                      {selectedScene.edit_prompt}
+                    </Paragraph>
+                  </div>
+                  <div>
+                    <Text className="project-detail-prompt-label">TTS 指令</Text>
+                    <Paragraph className="project-detail-prompt-copy">
+                      {selectedScene.instruction}
+                    </Paragraph>
+                  </div>
+                </div>
+              </div>
+
               {referenceUrl && (
                 <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: 16, marginBottom: 16 }}>
                   <Text style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 8, display: 'block' }}>
