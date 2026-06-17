@@ -2,7 +2,10 @@
 
 import pytest
 from httpx import AsyncClient
+import warnings
+
 from app.services.auth import hash_password, verify_password
+from app.services.auth import create_access_token
 
 
 @pytest.mark.asyncio
@@ -61,3 +64,12 @@ def test_password_hashing_roundtrip():
     hashed = hash_password("short-password")
     assert hashed != "short-password"
     assert verify_password("short-password", hashed) is True
+
+
+def test_create_access_token_uses_timezone_aware_utc():
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        token = create_access_token(1, "user")
+
+    assert token
+    assert not any("utcnow()" in str(item.message) for item in caught)
