@@ -250,7 +250,9 @@ async def assemble_video(project_dir: Path, scenes: list, video_path: Path):
                 str(segment),
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
             )
-            await proc.wait()
+            returncode = await proc.wait()
+            if returncode != 0:
+                raise RuntimeError(f"ffmpeg failed to generate segment {scene.seq} with exit code {returncode}")
             segments.append(segment)
 
     if not segments:
@@ -266,4 +268,6 @@ async def assemble_video(project_dir: Path, scenes: list, video_path: Path):
         "-c", "copy", str(video_path),
         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
     )
-    await proc.wait()
+    returncode = await proc.wait()
+    if returncode != 0:
+        raise RuntimeError(f"ffmpeg failed to concatenate video with exit code {returncode}")
