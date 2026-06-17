@@ -14,11 +14,11 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # StepFun
-    STEPFUN_API_KEY: str = "IOz7U4ygRrjd83fXPwuiNsQLvnbgJkmcankAKfVEKh43ODRT1oJctdJ3M6OkMEOE"
+    STEPFUN_API_KEY: str
     STEPFUN_BASE_URL: str = "https://api.stepfun.com/step_plan/v1"
 
     # Auth
-    SECRET_KEY: str = "your-secret-key"
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
 
