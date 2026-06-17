@@ -15,6 +15,8 @@ const requiredSections = [
   '## 快速开始',
   '## 架构概览',
   '## 测试',
+  '## 开发循环',
+  '## 故障排查',
 ]
 
 const missing = requiredSections.filter((snippet) => !readme.includes(snippet))
