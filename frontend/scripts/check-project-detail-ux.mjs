@@ -27,6 +27,11 @@ const componentSnippets = [
   'selectedScene.edit_prompt',
   'selectedScene.instruction',
   'selectedScene.text',
+  'loadProjectProgress',
+  'project.status === \'running\'',
+  'pipeline.progress(id)',
+  'pollProgress()',
+  'taskProgress?.status === \'pending\'',
 ]
 
 const styleSnippets = [
