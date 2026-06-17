@@ -15,6 +15,9 @@ const PIPELINE_STEPS = [
   { key: 'complete', label: '完成', icon: '✅' },
 ]
 
+const NON_TERMINAL_TASK_STATUSES = ['pending', 'running']
+const isNonTerminalTaskStatus = (status) => NON_TERMINAL_TASK_STATUSES.includes(status)
+
 export default function ProjectDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -38,7 +41,7 @@ export default function ProjectDetail() {
   const pollIntervalRef = useRef(null)
   const sceneAssetRequestRef = useRef(0)
   const canRun = ['created', 'failed', 'done'].includes(project?.status)
-  const isRunning = project?.status === 'running' || taskProgress?.status === 'pending'
+  const isRunning = project?.status === 'running' || isNonTerminalTaskStatus(taskProgress?.status)
   const isDone = project?.status === 'done'
   const pipelineFailure = project?.status === 'failed'
   const assetLoading = assetLoadingCount > 0
@@ -242,7 +245,7 @@ export default function ProjectDetail() {
       try {
         const res = await pipeline.progress(id)
         setTaskProgress(res.data)
-        if (res.data.status === 'done' || res.data.status === 'failed') {
+        if (!isNonTerminalTaskStatus(res.data.status)) {
           clearPollInterval()
           loadProject()
         }
