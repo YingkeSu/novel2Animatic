@@ -1,5 +1,7 @@
 """Tests for pipeline scene splitting (with mocked LLM)."""
 
+import asyncio
+import threading
 from types import SimpleNamespace
 import pytest
 import json
@@ -119,6 +121,74 @@ async def test_assemble_video_raises_when_no_segments_are_available(tmp_path):
 
     with pytest.raises(RuntimeError, match="No video segments"):
         await assemble_video(tmp_path, [scene], tmp_path / "final.mp4")
+
+
+@pytest.mark.asyncio
+async def test_run_pipeline_task_marks_pending_task_running_before_first_step(db_session_factory, tmp_path, monkeypatch):
+    split_started = threading.Event()
+    release_split = threading.Event()
+
+    class BlockingClient:
+        def llm_chat(self, messages):
+            split_started.set()
+            assert release_split.wait(timeout=5)
+            return json.dumps({
+                "scenes": [{
+                    "title": "Scene 1",
+                    "text": "Scene text",
+                    "shot_type": "中景",
+                    "narration": "Narration",
+                    "edit_prompt": "Prompt",
+                    "instruction": "语气自然",
+                }]
+            }, ensure_ascii=False)
+
+        def image_generate(self, **kwargs):
+            return b"image"
+
+        def tts(self, **kwargs):
+            return b"audio"
+
+    async def fake_assemble_video(project_dir, scenes, video_path):
+        video_path.write_bytes(b"video")
+
+    monkeypatch.setattr("app.services.pipeline.StepFunClient", BlockingClient)
+    monkeypatch.setattr("app.services.pipeline.STORAGE_DIR", tmp_path)
+    monkeypatch.setattr("app.services.pipeline.async_session", db_session_factory)
+    monkeypatch.setattr("app.services.pipeline.assemble_video", fake_assemble_video)
+
+    async with db_session_factory() as db:
+        user = User(email="pipeline-running@example.com", password_hash="hash")
+        db.add(user)
+        await db.flush()
+        project = Project(
+            user_id=user.id,
+            title="Pipeline Running",
+            source_text="足够长的文段用于验证 pipeline 运行中状态。",
+            style_writing="modern",
+            style_visual="ink_wash",
+            style_audio="ancient_male",
+            status="running",
+        )
+        db.add(project)
+        await db.flush()
+        task = Task(project_id=project.id, user_id=user.id, status="pending", step="queued", progress=0)
+        db.add(task)
+        await db.commit()
+        task_id = task.id
+
+    pipeline_task = asyncio.create_task(run_pipeline_task(task_id))
+    assert await asyncio.to_thread(split_started.wait, 5)
+
+    async with db_session_factory() as db:
+        task = await db.get(Task, task_id)
+
+    assert task.status == "running"
+    assert task.step == "split_scenes"
+    assert task.progress == 10
+
+    release_split.set()
+    await pipeline_task
 
 
 @pytest.mark.asyncio

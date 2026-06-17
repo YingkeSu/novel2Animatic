@@ -88,6 +88,7 @@ async def run_pipeline_task(task_id: int):
             client = StepFunClient()
 
             # Step 1: Split scenes
+            task.status = "running"
             task.step = "split_scenes"
             task.progress = 10
             await db.commit()
