@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "check": "node scripts/check-dashboard-ux.mjs && vite build"
+    "check": "node scripts/check-dashboard-ux.mjs && vite build",
+    "docs:check": "node ../scripts/check-readme.mjs"
   },
   "dependencies": {
     "antd": "^6.4.4",
