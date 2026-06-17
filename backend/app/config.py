@@ -1,10 +1,12 @@
 """Application configuration loaded from environment variables."""
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env")
+
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://novel2animatic:novel2animatic@localhost:5432/novel2animatic"
 
@@ -19,9 +21,6 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "your-secret-key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
-
-    class Config:
-        env_file = ".env"
 
 
 @lru_cache
