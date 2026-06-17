@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Typography, Progress, Button, Space, Tag, message } from 'antd'
+import { Typography, Progress, Button, Space, Tag, message, Alert } from 'antd'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
-import { projects, pipeline, styles as stylesApi } from '../services/api'
+import api, { projects, pipeline, styles as stylesApi } from '../services/api'
 
 const { Title, Text, Paragraph } = Typography
-
-const API_BASE = '/api'
 
 const PIPELINE_STEPS = [
   { key: 'split_scenes', label: '拆分场景', icon: '📝' },
@@ -25,7 +23,15 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(false)
   const [styleMap, setStyleMap] = useState({})
   const [selectedScene, setSelectedScene] = useState(null)
-  const token = localStorage.getItem('token')
+  const [assetLoadingCount, setAssetLoadingCount] = useState(0)
+  const [assetError, setAssetError] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
+  const [audioUrl, setAudioUrl] = useState('')
+  const [videoUrl, setVideoUrl] = useState('')
+  const canRun = ['created', 'failed', 'done'].includes(project?.status)
+  const isRunning = project?.status === 'running' || (taskProgress && taskProgress.status === 'pending')
+  const isDone = project?.status === 'done'
+  const assetLoading = assetLoadingCount > 0
 
   useEffect(() => {
     Promise.all([
@@ -54,6 +60,66 @@ export default function ProjectDetail() {
   }
 
   useEffect(() => { loadProject() }, [id])
+
+  useEffect(() => () => {
+    if (imageUrl) {
+      URL.revokeObjectURL(imageUrl)
+    }
+  }, [imageUrl])
+
+  useEffect(() => () => {
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl)
+    }
+  }, [audioUrl])
+
+  useEffect(() => () => {
+    if (videoUrl) {
+      URL.revokeObjectURL(videoUrl)
+    }
+  }, [videoUrl])
+
+  const loadAuthenticatedAssetUrl = async (path, setter) => {
+    setAssetLoadingCount((count) => count + 1)
+    setAssetError('')
+    try {
+      const response = await api.get(path, { responseType: 'blob' })
+      const objectUrl = URL.createObjectURL(response.data)
+      setter((current) => {
+        if (current) {
+          URL.revokeObjectURL(current)
+        }
+        return objectUrl
+      })
+    } catch (e) {
+      setAssetError(e.response?.data?.detail || '媒体资源加载失败')
+      setter((current) => {
+        if (current) {
+          URL.revokeObjectURL(current)
+        }
+        return ''
+      })
+    } finally {
+      setAssetLoadingCount((count) => Math.max(0, count - 1))
+    }
+  }
+
+  useEffect(() => {
+    if (!isDone || !selectedScene) {
+      return
+    }
+
+    loadAuthenticatedAssetUrl(`/projects/${id}/scenes/${selectedScene.seq}/image`, setImageUrl)
+    loadAuthenticatedAssetUrl(`/projects/${id}/scenes/${selectedScene.seq}/audio`, setAudioUrl)
+  }, [id, isDone, selectedScene])
+
+  useEffect(() => {
+    if (!isDone) {
+      return
+    }
+
+    loadAuthenticatedAssetUrl(`/projects/${id}/video`, setVideoUrl)
+  }, [id, isDone])
 
   const handleRun = async () => {
     setLoading(true)
@@ -85,11 +151,7 @@ export default function ProjectDetail() {
 
   if (!project) return null
 
-  const canRun = ['created', 'failed', 'done'].includes(project.status)
-  const isRunning = project.status === 'running' || (taskProgress && taskProgress.status === 'pending')
-  const isDone = project.status === 'done'
   const displayName = (key) => styleMap[key] || key
-  const assetUrl = (path) => `${API_BASE}${path}?token=${token}`
 
   const currentStepIndex = taskProgress
     ? PIPELINE_STEPS.findIndex(s => s.key === taskProgress.step)
@@ -171,12 +233,30 @@ export default function ProjectDetail() {
 
         {/* Center: Preview area */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+          {assetError && (
+            <Alert
+              type="warning"
+              showIcon
+              message={assetError}
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
+          {assetLoading && (
+            <Alert
+              type="info"
+              showIcon
+              message="正在加载媒体资源..."
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
           {isDone && selectedScene ? (
             <div>
               {/* Scene image */}
               <div className="video-container" style={{ marginBottom: 16 }}>
                 <img
-                  src={assetUrl(`/projects/${id}/scenes/${selectedScene.seq}/image`)}
+                  src={imageUrl}
                   alt={selectedScene.title}
                   style={{ width: '100%', maxHeight: 400, objectFit: 'contain', background: '#000' }}
                 />
@@ -200,7 +280,7 @@ export default function ProjectDetail() {
                 <audio
                   controls
                   style={{ width: '100%' }}
-                  src={assetUrl(`/projects/${id}/scenes/${selectedScene.seq}/audio`)}
+                  src={audioUrl}
                 />
               </div>
             </div>
@@ -241,7 +321,7 @@ export default function ProjectDetail() {
             <div className="video-container">
               <video
                 controls
-                src={assetUrl(`/projects/${id}/video`)}
+                src={videoUrl}
               />
             </div>
 

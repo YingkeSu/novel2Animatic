@@ -1,7 +1,7 @@
 """Assets router - serve generated files."""
 
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +15,20 @@ from app.models.asset import Asset
 from app.models.scene import Scene
 
 router = APIRouter(prefix="/api/projects", tags=["assets"])
+
+
+def _extract_token(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    token: str | None = Query(default=None),
+) -> str:
+    if authorization:
+        scheme, _, raw_token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not raw_token:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return raw_token
+    if token:
+        return token
+    raise HTTPException(status_code=401, detail="Missing token")
 
 
 async def _resolve_user(token: str, db: AsyncSession) -> User:
@@ -34,7 +48,7 @@ async def _resolve_user(token: str, db: AsyncSession) -> User:
 @router.get("/{project_id}/video")
 async def get_video(
     project_id: int,
-    token: str = Query(...),
+    token: str = Depends(_extract_token),
     db: AsyncSession = Depends(get_db),
 ):
     user = await _resolve_user(token, db)
@@ -63,7 +77,7 @@ async def get_scene_file(
     project_id: int,
     scene_seq: int,
     file_type: str,
-    token: str = Query(...),
+    token: str = Depends(_extract_token),
     db: AsyncSession = Depends(get_db),
 ):
     if file_type not in ("image", "audio"):
