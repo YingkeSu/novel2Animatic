@@ -48,6 +48,25 @@ def get_scene_split_prompt(style_name: str) -> str:
     return style.get("scene_split_prompt", "")
 
 
+def select_scene_split_system_prompt(
+    scene_split_prompt: str | None,
+    system_prompt: str | None,
+) -> str:
+    """Select the best system prompt for scene splitting."""
+    scene_split_prompt = scene_split_prompt.strip() if isinstance(scene_split_prompt, str) else ""
+    system_prompt = system_prompt.strip() if isinstance(system_prompt, str) else ""
+    return scene_split_prompt or system_prompt or "你是一位专业的编剧。"
+
+
+def build_scene_split_system_prompt(style_name: str) -> str:
+    """Build the system prompt used to split source text into scenes."""
+    style = load_style("writing", style_name)
+    return select_scene_split_system_prompt(
+        style.get("scene_split_prompt"),
+        style.get("system_prompt"),
+    )
+
+
 def get_visual_suffix(style_name: str) -> str:
     """Get prompt suffix for visual style."""
     style = load_style("visual", style_name)
