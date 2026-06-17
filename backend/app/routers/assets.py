@@ -1,7 +1,7 @@
 """Assets router - serve generated files."""
 
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,15 +28,12 @@ def _resolve_asset_path(file_path: str, missing_detail: str) -> Path:
 
 def _extract_token(
     authorization: str | None = Header(default=None, alias="Authorization"),
-    token: str | None = Query(default=None),
 ) -> str:
     if authorization:
         scheme, _, raw_token = authorization.partition(" ")
         if scheme.lower() != "bearer" or not raw_token:
             raise HTTPException(status_code=401, detail="Invalid token")
         return raw_token
-    if token:
-        return token
     raise HTTPException(status_code=401, detail="Missing token")
 
 
