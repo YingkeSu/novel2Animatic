@@ -93,7 +93,7 @@ Style plugins are YAML files loaded safely from `backend/styles`:
 Current pipeline flow:
 
 1. Split source text into scenes with StepFun `step-3.7-flash`; invalid or empty JSON falls back to one safe scene.
-2. Mark `generate_refs` progress. Character reference image generation is a planned step and is not implemented yet.
+2. Generate a project-level character/reference image as `reference.png` for visual continuity.
 3. Generate one image per scene with `step-image-edit-2` using each scene prompt plus the selected visual suffix.
 4. Generate one MP3 narration per scene with `stepaudio-2.5-tts` and selected audio parameters.
 5. Assemble scene images and audio into MP4 segments, then concatenate them into `final.mp4` with `ffmpeg`.
@@ -134,6 +134,5 @@ npm run docs:check
 
 - Pipeline execution is in-process. A server restart cancels active jobs, and there is no external worker, retry queue, or concurrency control yet.
 - Redis, Celery, SSE, and MinIO are dependencies or architecture targets but are not part of the active pipeline path.
-- Character reference generation is represented as a progress step but currently does not create reference images.
 - There are no Alembic migrations in the current flow; `backend/init_db.py` creates tables from models.
 - Generated asset paths are local filesystem paths, so deployment needs persistent shared storage before scaling beyond one backend instance.

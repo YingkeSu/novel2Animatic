@@ -28,6 +28,8 @@ export default function ProjectDetail() {
   const [imageUrl, setImageUrl] = useState('')
   const [audioUrl, setAudioUrl] = useState('')
   const [videoUrl, setVideoUrl] = useState('')
+  const [referenceUrl, setReferenceUrl] = useState('')
+  const [referenceAsset, setReferenceAsset] = useState(null)
   const canRun = ['created', 'failed', 'done'].includes(project?.status)
   const isRunning = project?.status === 'running' || (taskProgress && taskProgress.status === 'pending')
   const isDone = project?.status === 'done'
@@ -79,6 +81,12 @@ export default function ProjectDetail() {
     }
   }, [videoUrl])
 
+  useEffect(() => () => {
+    if (referenceUrl) {
+      URL.revokeObjectURL(referenceUrl)
+    }
+  }, [referenceUrl])
+
   const loadAuthenticatedAssetUrl = async (path, setter) => {
     setAssetLoadingCount((count) => count + 1)
     setAssetError('')
@@ -112,6 +120,15 @@ export default function ProjectDetail() {
     loadAuthenticatedAssetUrl(`/projects/${id}/scenes/${selectedScene.seq}/image`, setImageUrl)
     loadAuthenticatedAssetUrl(`/projects/${id}/scenes/${selectedScene.seq}/audio`, setAudioUrl)
   }, [id, isDone, selectedScene])
+
+  useEffect(() => {
+    if (!isDone) {
+      return
+    }
+
+    loadAuthenticatedAssetUrl(`/projects/${id}/reference`, setReferenceUrl)
+    setReferenceAsset({ fileName: 'reference.png' })
+  }, [id, isDone])
 
   useEffect(() => {
     if (!isDone) {
@@ -273,6 +290,22 @@ export default function ProjectDetail() {
                   {selectedScene.narration}
                 </Paragraph>
               </div>
+
+              {referenceUrl && (
+                <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: 16, marginBottom: 16 }}>
+                  <Text style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 8, display: 'block' }}>
+                    Reference image
+                  </Text>
+                  <Text style={{ color: 'var(--text-secondary)', fontSize: 11, marginBottom: 8, display: 'block' }}>
+                    {referenceAsset?.fileName}
+                  </Text>
+                  <img
+                    src={referenceUrl}
+                    alt="Reference image"
+                    style={{ width: '100%', maxHeight: 240, objectFit: 'contain', background: '#000' }}
+                  />
+                </div>
+              )}
 
               {/* Audio player */}
               <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: 16 }}>
