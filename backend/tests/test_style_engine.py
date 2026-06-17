@@ -30,6 +30,17 @@ def test_load_nonexistent_style():
     assert style == {}
 
 
+def test_load_style_rejects_path_traversal(tmp_path, monkeypatch):
+    styles_dir = tmp_path / "styles"
+    (styles_dir / "writing").mkdir(parents=True)
+    (tmp_path / "escape.yaml").write_text("name: escaped\nsecret: true\n", encoding="utf-8")
+    monkeypatch.setattr("app.services.style_engine.STYLES_DIR", styles_dir)
+
+    style = load_style("writing", "../../escape")
+
+    assert style == {}
+
+
 def test_get_writing_prompt():
     prompt = get_writing_prompt("modern")
     assert len(prompt) > 0
