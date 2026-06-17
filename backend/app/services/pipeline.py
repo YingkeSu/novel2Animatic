@@ -131,6 +131,7 @@ async def run_pipeline_task(task_id: int):
 
 def split_scenes_sync(client: StepFunClient, text: str, style: str) -> list:
     """Use LLM to split text into scenes (synchronous)."""
+    default_scene = [{"title": "Scene 1", "text": text, "shot_type": "中景", "narration": text, "edit_prompt": text, "instruction": "语气自然"}]
     style_prompt = get_writing_prompt(style)
     system_msg = style_prompt if style_prompt else "你是一位专业的编剧。"
 
@@ -151,9 +152,21 @@ def split_scenes_sync(client: StepFunClient, text: str, style: str) -> list:
         else:
             json_str = response.strip()
         data = json.loads(json_str)
-        return data.get("scenes", [])
+        scenes = data.get("scenes") or default_scene
+        return [
+            {
+                **scene,
+                "text": scene.get("text") or text,
+                "shot_type": scene.get("shot_type") or "中景",
+                "narration": scene.get("narration") or text,
+                "edit_prompt": scene.get("edit_prompt") or text,
+                "instruction": scene.get("instruction") or "语气自然",
+                "character": scene.get("character") or None,
+            }
+            for scene in scenes
+        ]
     except (json.JSONDecodeError, IndexError):
-        return [{"title": "Scene 1", "text": text, "shot_type": "中景", "narration": text, "edit_prompt": text, "instruction": "语气自然"}]
+        return default_scene
 
 
 async def assemble_video(project_dir: Path, scenes: list, video_path: Path):

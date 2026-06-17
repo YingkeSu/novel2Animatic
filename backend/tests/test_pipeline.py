@@ -42,3 +42,31 @@ def test_split_scenes_invalid_json():
     assert len(scenes) == 1
     assert scenes[0]["title"] == "Scene 1"
     assert scenes[0]["text"] == "Some text"
+
+
+def test_split_scenes_empty_scene_list_falls_back():
+    mock_client = MagicMock()
+    mock_client.llm_chat.return_value = json.dumps({"scenes": []}, ensure_ascii=False)
+
+    scenes = split_scenes_sync(mock_client, "Some text", "modern")
+    assert len(scenes) == 1
+    assert scenes[0]["title"] == "Scene 1"
+
+
+def test_split_scenes_incomplete_scene_uses_safe_defaults():
+    mock_client = MagicMock()
+    mock_client.llm_chat.return_value = json.dumps({
+        "scenes": [{"title": "Only title"}]
+    }, ensure_ascii=False)
+
+    scenes = split_scenes_sync(mock_client, "Some text", "modern")
+
+    assert scenes == [{
+        "title": "Only title",
+        "text": "Some text",
+        "shot_type": "中景",
+        "narration": "Some text",
+        "edit_prompt": "Some text",
+        "instruction": "语气自然",
+        "character": None,
+    }]
