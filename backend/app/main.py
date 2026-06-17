@@ -7,10 +7,11 @@ from app.config import get_settings
 from app.routers import auth, projects, pipeline, styles, assets
 
 app = FastAPI(title="novel2Animatic", version="0.1.0")
+settings = get_settings()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
