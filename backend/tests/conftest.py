@@ -1,10 +1,14 @@
 """Test configuration and fixtures."""
 
 import asyncio
+import os
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+
+os.environ.setdefault("SECRET_KEY", "test-secret-key")
+os.environ.setdefault("STEPFUN_API_KEY", "test-stepfun-api-key")
 
 from app.database import Base, get_db
 from app.main import app
