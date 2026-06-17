@@ -102,6 +102,7 @@ class ProjectResponse(BaseModel):
     style_visual: str
     style_audio: str
     created_at: datetime
+    latest_error_msg: Optional[str] = None
 
 
 class SceneResponse(BaseModel):

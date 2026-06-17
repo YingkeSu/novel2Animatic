@@ -10,6 +10,8 @@ const requiredSnippets = [
   'empty-state',
   '立即创建',
   'dashboard-toolbar',
+  'latest_error_msg',
+  'dashboard-card-error',
 ]
 
 const missing = requiredSnippets.filter((snippet) => !dashboard.includes(snippet))
