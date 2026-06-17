@@ -123,8 +123,8 @@ async def test_video_asset_accepts_lowercase_bearer_scheme(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_video_asset_accepts_query_token(client: AsyncClient):
-    token = await register_and_get_token(client, "asset-query@example.com")
+async def test_video_asset_rejects_query_token(client: AsyncClient):
+    token = await register_and_get_token(client, "asset-query-rejected@example.com")
     create_resp = await client.post(
         "/api/projects",
         json={
@@ -137,8 +137,8 @@ async def test_video_asset_accepts_query_token(client: AsyncClient):
 
     response = await client.get(f"/api/projects/{project_id}/video?token={token}")
 
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Video not found"
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing token"
 
 
 @pytest.mark.asyncio
