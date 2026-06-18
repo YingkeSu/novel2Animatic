@@ -239,7 +239,6 @@ export default function Dashboard() {
                             disabled={isDeleteDisabled}
                             aria-label={deleteAriaLabel}
                             title={deleteTooltip}
-                            onClick={(e) => e.stopPropagation()}
                           />
                         </Popconfirm>
                       </span>
