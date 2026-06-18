@@ -5,11 +5,14 @@ from app.config import get_settings
 
 
 class StepFunClient:
-    def __init__(self, api_key: str = None, base_url: str = None):
+    DEFAULT_TIMEOUT = 120  # seconds
+
+    def __init__(self, api_key: str = None, base_url: str = None, timeout: int = None):
         settings = get_settings()
         self.client = OpenAI(
             api_key=api_key or settings.STEPFUN_API_KEY,
             base_url=base_url or settings.STEPFUN_BASE_URL,
+            timeout=timeout or self.DEFAULT_TIMEOUT,
         )
 
     def llm_chat(self, messages: list, model: str = "step-3.7-flash", **kwargs) -> str:

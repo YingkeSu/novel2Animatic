@@ -3,6 +3,8 @@
 import asyncio
 import json
 import shutil
+import time
+import logging
 from pathlib import Path
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +18,47 @@ from app.models.asset import Asset
 from app.services.stepfun_client import StepFunClient
 from app.services.style_engine import build_scene_split_system_prompt, get_visual_suffix, get_audio_params
 
+logger = logging.getLogger(__name__)
+
 STORAGE_DIR = Path(__file__).parent.parent.parent / "storage"
+
+# Transient error types that should be retried
+_TRANSIENT_ERRORS: tuple[type[Exception], ...] = (ConnectionError,)
+try:
+    import openai
+    _TRANSIENT_ERRORS = (
+        openai.APITimeoutError,
+        openai.APIConnectionError,
+        openai.RateLimitError,
+        ConnectionError,
+    )
+except ImportError:
+    pass
+
+MAX_RETRIES = 3
+RETRY_BASE_DELAY = 2  # seconds, exponential backoff
+
+
+def _retry_call(fn, *args, max_retries=MAX_RETRIES, base_delay=RETRY_BASE_DELAY, **kwargs):
+    """Call fn with retry on transient errors (timeout, connection, rate limit).
+
+    Uses exponential backoff: base_delay * 2^(attempt-1).
+    Non-transient errors propagate immediately.
+    """
+    last_exc: Exception = RuntimeError("retry_call: no attempts made")
+    for attempt in range(max_retries):
+        try:
+            return fn(*args, **kwargs)
+        except _TRANSIENT_ERRORS as e:
+            last_exc = e
+            if attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)
+                logger.warning("Transient error on attempt %d/%d: %s. Retrying in %ds...",
+                               attempt + 1, max_retries, e, delay)
+                time.sleep(delay)
+            else:
+                logger.error("All %d retries exhausted: %s", max_retries, e)
+    raise last_exc
 
 
 async def cleanup_pipeline_outputs(db: AsyncSession, user_id: int, project_id: int):
@@ -54,7 +96,7 @@ async def generate_reference_asset(db: AsyncSession, client: StepFunClient, proj
         prompt_parts.append(visual_suffix)
 
     image_data = await asyncio.to_thread(
-        client.image_generate,
+        _retry_call, client.image_generate,
         prompt="".join(prompt_parts),
         extra_body={"cfg_scale": 1.0, "steps": 8, "seed": 41},
         size="1024x1024",
@@ -93,7 +135,9 @@ async def run_pipeline_task(task_id: int):
             task.progress = 10
             await db.commit()
 
-            scenes_data = await asyncio.to_thread(split_scenes_sync, client, project.source_text, project.style_writing)
+            scenes_data = await asyncio.to_thread(
+                _retry_call, split_scenes_sync, client, project.source_text, project.style_writing
+            )
 
             # Save scenes to DB
             for i, sd in enumerate(scenes_data):
@@ -133,11 +177,11 @@ async def run_pipeline_task(task_id: int):
             visual_suffix = get_visual_suffix(project.style_visual)
             for scene in scenes:
                 img_data = await asyncio.to_thread(
-                    client.image_generate,
-                    prompt=scene.edit_prompt + visual_suffix,
-                    extra_body={"cfg_scale": 1.0, "steps": 8, "seed": 42 + scene.seq},
-                    size="1024x1024",
-                )
+                _retry_call, client.image_generate,
+                prompt=scene.edit_prompt + visual_suffix,
+                extra_body={"cfg_scale": 1.0, "steps": 8, "seed": 42 + scene.seq},
+                size="1024x1024",
+            )
                 img_path = project_dir / f"scene_{scene.seq}.png"
                 img_path.write_bytes(img_data)
                 db.add(Asset(project_id=project.id, scene_id=scene.id, type="image", file_path=str(img_path), file_size=len(img_data)))
@@ -156,7 +200,7 @@ async def run_pipeline_task(task_id: int):
                     else audio_params["instruction"]
                 )
                 audio_data = await asyncio.to_thread(
-                    client.tts,
+                    _retry_call, client.tts,
                     text=scene.narration,
                     voice=audio_params["voice"],
                     extra_body={
