@@ -78,8 +78,9 @@ def get_audio_params(style_name: str) -> dict[str, Any]:
     """Get TTS parameters for audio style."""
     style = load_style("audio", style_name)
     default_instruction = style.get("default_instruction", "")
+    voice = style.get("voice", "cixingnansheng")
     return {
-        "voice": style.get("voice", "cixingnansheng"),
+        "voice": voice if isinstance(voice, str) and voice.strip() else "cixingnansheng",
         "instruction": default_instruction.strip() if isinstance(default_instruction, str) else "",
         "speed": style.get("speed", 1.0),
         "volume": style.get("volume", 1.0),
