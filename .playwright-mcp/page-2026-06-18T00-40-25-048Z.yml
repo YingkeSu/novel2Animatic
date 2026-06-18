@@ -1,0 +1,38 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - button "arrow-left" [ref=e7] [cursor=pointer]:
+          - img "arrow-left" [ref=e9]:
+            - img [ref=e10]
+        - heading "Delete Detail" [level=3] [ref=e13]
+        - generic [ref=e15]: 📝 待生成
+      - generic [ref=e16]:
+        - generic [ref=e18]: 现代
+        - generic [ref=e20]: 写实
+        - generic [ref=e22]: 现代女声
+        - button "reload 开始生成" [ref=e24] [cursor=pointer]:
+          - img "reload" [ref=e26]:
+            - img [ref=e27]
+          - generic [ref=e29]: 开始生成
+        - button "删除 Delete Detail" [active] [ref=e32] [cursor=pointer]:
+          - img "delete" [ref=e34]:
+            - img [ref=e35]
+          - generic [ref=e37]: 删除项目
+    - generic [ref=e38]:
+      - generic [ref=e40]: 场景列表 (0)
+      - generic [ref=e42]:
+        - generic [ref=e43]: 🎬
+        - heading "点击右上角\"开始生成\"" [level=4] [ref=e44]
+        - text: AI 将自动拆分场景、生成图片和音频、合成视频
+  - tooltip "exclamation-circle 确定删除此项目？ 取 消 删 除" [ref=e46]:
+    - generic [ref=e48]:
+      - generic [ref=e49]:
+        - img "exclamation-circle" [ref=e51]:
+          - img [ref=e52]
+        - generic [ref=e55]: 确定删除此项目？
+      - generic [ref=e56]:
+        - button "取 消" [ref=e57] [cursor=pointer]:
+          - generic [ref=e58]: 取 消
+        - button "删 除" [ref=e59] [cursor=pointer]:
+          - generic [ref=e60]: 删 除
