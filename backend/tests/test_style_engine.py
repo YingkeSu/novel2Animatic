@@ -193,6 +193,50 @@ def test_get_audio_params_preserves_non_blank_voice_whitespace(tmp_path, monkeyp
     assert params["voice"] == " custom_voice "
 
 
+@pytest.mark.parametrize(
+    ("speed", "volume"),
+    [
+        ('"   "', "fast"),
+        ("fast", '""'),
+        ("null", "null"),
+    ],
+)
+def test_get_audio_params_defaults_invalid_numeric_params(tmp_path, monkeypatch, speed, volume):
+    styles_dir = tmp_path / "styles"
+    audio_dir = styles_dir / "audio"
+    audio_dir.mkdir(parents=True)
+    (audio_dir / "invalid_numeric.yaml").write_text(
+        f"name: invalid numeric\nvoice: custom_voice\ndefault_instruction: hello\nspeed: {speed}\nvolume: {volume}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("app.services.style_engine.STYLES_DIR", styles_dir)
+
+    params = get_audio_params("invalid_numeric")
+
+    assert params == {
+        "voice": "custom_voice",
+        "instruction": "hello",
+        "speed": 1.0,
+        "volume": 1.0,
+    }
+
+
+def test_get_audio_params_preserves_valid_numeric_params(tmp_path, monkeypatch):
+    styles_dir = tmp_path / "styles"
+    audio_dir = styles_dir / "audio"
+    audio_dir.mkdir(parents=True)
+    (audio_dir / "valid_numeric.yaml").write_text(
+        "name: valid numeric\nvoice: custom_voice\ndefault_instruction: hello\nspeed: 0.9\nvolume: 1.2\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("app.services.style_engine.STYLES_DIR", styles_dir)
+
+    params = get_audio_params("valid_numeric")
+
+    assert params["speed"] == 0.9
+    assert params["volume"] == 1.2
+
+
 def test_list_writing_styles():
     styles = list_styles("writing")
     names = [s["name"] for s in styles]

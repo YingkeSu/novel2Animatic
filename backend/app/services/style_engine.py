@@ -74,6 +74,23 @@ def get_visual_suffix(style_name: str) -> str:
     return prompt_suffix.strip() if isinstance(prompt_suffix, str) else ""
 
 
+def _normalize_audio_numeric_param(value: Any, default: float = 1.0) -> float:
+    """Normalize audio numeric params from YAML into a usable float."""
+    if isinstance(value, bool) or value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return default
+        try:
+            return float(value)
+        except ValueError:
+            return default
+    return default
+
+
 def get_audio_params(style_name: str) -> dict[str, Any]:
     """Get TTS parameters for audio style."""
     style = load_style("audio", style_name)
@@ -82,8 +99,8 @@ def get_audio_params(style_name: str) -> dict[str, Any]:
     return {
         "voice": voice if isinstance(voice, str) and voice.strip() else "cixingnansheng",
         "instruction": default_instruction.strip() if isinstance(default_instruction, str) else "",
-        "speed": style.get("speed", 1.0),
-        "volume": style.get("volume", 1.0),
+        "speed": _normalize_audio_numeric_param(style.get("speed"), 1.0),
+        "volume": _normalize_audio_numeric_param(style.get("volume"), 1.0),
     }
 
 
