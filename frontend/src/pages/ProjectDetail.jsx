@@ -231,6 +231,8 @@ export default function ProjectDetail() {
     try {
       await pipeline.run(id)
       message.success('Pipeline 已启动')
+      setProject(prev => prev ? { ...prev, status: 'running' } : prev)
+      setTaskProgress(null)
       pollProgress()
     } catch (e) {
       message.error(e.response?.data?.detail || '启动失败')
