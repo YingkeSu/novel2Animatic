@@ -143,7 +143,7 @@ def test_get_audio_params_treats_whitespace_default_instruction_as_empty(tmp_pat
     audio_dir = styles_dir / "audio"
     audio_dir.mkdir(parents=True)
     (audio_dir / "blank.yaml").write_text(
-        'name: blank\nvoice: custom_voice\ndefault_instruction: "   "\nspeed: 1.2\nvolume: 0.8\n',
+        'name: blank\nvoice: "   "\ndefault_instruction: "   "\nspeed: 1.2\nvolume: 0.8\n',
         encoding="utf-8",
     )
     monkeypatch.setattr("app.services.style_engine.STYLES_DIR", styles_dir)
@@ -151,11 +151,46 @@ def test_get_audio_params_treats_whitespace_default_instruction_as_empty(tmp_pat
     params = get_audio_params("blank")
 
     assert params == {
-        "voice": "custom_voice",
+        "voice": "cixingnansheng",
         "instruction": "",
         "speed": 1.2,
         "volume": 0.8,
     }
+
+
+def test_get_audio_params_keeps_non_blank_voice_as_is(tmp_path, monkeypatch):
+    styles_dir = tmp_path / "styles"
+    audio_dir = styles_dir / "audio"
+    audio_dir.mkdir(parents=True)
+    (audio_dir / "custom.yaml").write_text(
+        'name: custom\nvoice: custom_voice\ndefault_instruction: hello\nspeed: 1.2\nvolume: 0.8\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("app.services.style_engine.STYLES_DIR", styles_dir)
+
+    params = get_audio_params("custom")
+
+    assert params == {
+        "voice": "custom_voice",
+        "instruction": "hello",
+        "speed": 1.2,
+        "volume": 0.8,
+    }
+
+
+def test_get_audio_params_preserves_non_blank_voice_whitespace(tmp_path, monkeypatch):
+    styles_dir = tmp_path / "styles"
+    audio_dir = styles_dir / "audio"
+    audio_dir.mkdir(parents=True)
+    (audio_dir / "spaced.yaml").write_text(
+        'name: spaced\nvoice: " custom_voice "\ndefault_instruction: hello\nspeed: 1.2\nvolume: 0.8\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("app.services.style_engine.STYLES_DIR", styles_dir)
+
+    params = get_audio_params("spaced")
+
+    assert params["voice"] == " custom_voice "
 
 
 def test_list_writing_styles():
