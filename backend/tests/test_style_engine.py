@@ -118,11 +118,44 @@ def test_get_visual_suffix():
     assert "水墨" in suffix
 
 
+def test_get_visual_suffix_treats_whitespace_prompt_suffix_as_empty(tmp_path, monkeypatch):
+    styles_dir = tmp_path / "styles"
+    visual_dir = styles_dir / "visual"
+    visual_dir.mkdir(parents=True)
+    (visual_dir / "blank.yaml").write_text(
+        'name: blank\nprompt_suffix: "   "\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("app.services.style_engine.STYLES_DIR", styles_dir)
+
+    assert get_visual_suffix("blank") == ""
+
+
 def test_get_audio_params():
     params = get_audio_params("ancient_male")
     assert params["voice"] == "cixingnansheng"
     assert "instruction" in params
     assert "speed" in params
+
+
+def test_get_audio_params_treats_whitespace_default_instruction_as_empty(tmp_path, monkeypatch):
+    styles_dir = tmp_path / "styles"
+    audio_dir = styles_dir / "audio"
+    audio_dir.mkdir(parents=True)
+    (audio_dir / "blank.yaml").write_text(
+        'name: blank\nvoice: custom_voice\ndefault_instruction: "   "\nspeed: 1.2\nvolume: 0.8\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("app.services.style_engine.STYLES_DIR", styles_dir)
+
+    params = get_audio_params("blank")
+
+    assert params == {
+        "voice": "custom_voice",
+        "instruction": "",
+        "speed": 1.2,
+        "volume": 0.8,
+    }
 
 
 def test_list_writing_styles():

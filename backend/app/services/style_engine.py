@@ -70,15 +70,17 @@ def build_scene_split_system_prompt(style_name: str) -> str:
 def get_visual_suffix(style_name: str) -> str:
     """Get prompt suffix for visual style."""
     style = load_style("visual", style_name)
-    return style.get("prompt_suffix", "")
+    prompt_suffix = style.get("prompt_suffix", "")
+    return prompt_suffix.strip() if isinstance(prompt_suffix, str) else ""
 
 
 def get_audio_params(style_name: str) -> dict[str, Any]:
     """Get TTS parameters for audio style."""
     style = load_style("audio", style_name)
+    default_instruction = style.get("default_instruction", "")
     return {
         "voice": style.get("voice", "cixingnansheng"),
-        "instruction": style.get("default_instruction", ""),
+        "instruction": default_instruction.strip() if isinstance(default_instruction, str) else "",
         "speed": style.get("speed", 1.0),
         "volume": style.get("volume", 1.0),
     }
