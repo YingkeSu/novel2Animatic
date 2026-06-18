@@ -241,7 +241,8 @@ export default function ProjectDetail() {
 
   const pollProgress = () => {
     clearPollInterval()
-    pollIntervalRef.current = setInterval(async () => {
+    // Immediate first poll, then every 2s
+    const doPoll = async () => {
       try {
         const res = await pipeline.progress(id)
         setTaskProgress(res.data)
@@ -249,10 +250,12 @@ export default function ProjectDetail() {
           clearPollInterval()
           loadProject()
         }
-      } catch (e) {
-        clearPollInterval()
+      } catch {
+        // Transient error — keep polling, don't stop
       }
-    }, 2000)
+    }
+    doPoll()
+    pollIntervalRef.current = setInterval(doPoll, 2000)
   }
 
   if (detailLoading && !project) {
