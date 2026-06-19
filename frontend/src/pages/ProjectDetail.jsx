@@ -235,7 +235,9 @@ export default function ProjectDetail() {
       setTaskProgress(null)
       pollProgress()
     } catch (e) {
-      message.error(e.response?.data?.detail || '启动失败')
+      const detail = e.response?.data?.detail
+      const msg = Array.isArray(detail) ? detail[0]?.msg || '启动失败' : detail || '启动失败'
+      message.error(msg)
     } finally {
       setLoading(false)
     }
