@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import auth, projects, pipeline, styles, assets
+from app.routers import auth, projects, pipeline, styles, assets, events
 
 app = FastAPI(title="novel2Animatic", version="0.1.0")
 settings = get_settings()
@@ -22,6 +22,7 @@ app.include_router(projects.router)
 app.include_router(pipeline.router)
 app.include_router(styles.router)
 app.include_router(assets.router)
+app.include_router(events.router)
 
 
 @app.get("/health")
