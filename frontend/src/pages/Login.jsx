@@ -28,7 +28,9 @@ export default function Login({ onLogin }) {
       message.success(isRegister ? '注册成功' : '登录成功')
       onLogin()
     } catch (e) {
-      message.error(e.response?.data?.detail || '操作失败')
+      const detail = e.response?.data?.detail
+      const msg = Array.isArray(detail) ? detail[0]?.msg || '操作失败' : detail || '操作失败'
+      message.error(msg)
     } finally {
       setLoading(false)
     }
