@@ -9,6 +9,13 @@ const SOURCE_TYPES = [
   { key: 'play_world', label: '🌍 开放世界', desc: '交互式文字冒险，每回合推进剧情' },
 ]
 
+const STATUS_LABELS = {
+  created: '待生成',
+  running: '生成中',
+  done: '已完成',
+  failed: '失败',
+}
+
 export default function ChatPage() {
   const { id: projectId } = useParams()
   const navigate = useNavigate()
@@ -255,7 +262,7 @@ export default function ChatPage() {
               onClick={() => navigate(`/chat/project/${p.id}`)}
             >
               <span className="project-title">{p.title}</span>
-              <span className={`project-status status-${p.status}`}>{p.status}</span>
+              <span className={`project-status status-${p.status}`}>{STATUS_LABELS[p.status] || p.status}</span>
             </div>
           ))}
           <button
