@@ -256,7 +256,18 @@ export default function ProjectDetail() {
           loadProject()
         }
       } catch {
-        // Transient error — keep polling, don't stop
+        // Progress endpoint may 404 for non-pipeline source types (short_fiction, play_world)
+        // Fall back to polling project status directly
+        try {
+          const projRes = await projects.get(id)
+          const proj = projRes.data
+          if (proj.status !== 'running') {
+            clearPollInterval()
+            setProject(proj)
+          }
+        } catch {
+          // Transient error — keep polling
+        }
       }
     }
     doPoll()
