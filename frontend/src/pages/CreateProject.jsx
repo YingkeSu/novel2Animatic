@@ -97,7 +97,9 @@ export default function CreateProject() {
       message.success('项目创建成功')
       navigate(`/project/${res.data.id}`)
     } catch (e) {
-      message.error(e.response?.data?.detail || '创建失败')
+      const detail = e.response?.data?.detail
+      const msg = Array.isArray(detail) ? detail[0]?.msg || '创建失败' : detail || '创建失败'
+      message.error(msg)
     } finally {
       setLoading(false)
     }

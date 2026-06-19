@@ -206,7 +206,9 @@ export default function ChatPage() {
       }
     } catch (err) {
       console.error('Failed:', err)
-      addMessage('system', `❌ 错误: ${err.response?.data?.detail || err.message}`)
+      const detail = err.response?.data?.detail
+      const msg = Array.isArray(detail) ? detail[0]?.msg || err.message : detail || err.message
+      addMessage('system', `❌ 错误: ${msg}`)
     } finally {
       setLoading(false)
     }
