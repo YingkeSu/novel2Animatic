@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Form, Input, Select, Button, Card, message, Typography, Space, Alert } from 'antd'
+import { Form, Input, Select, Button, Card, App, Typography, Space, Alert } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import { projects, styles as stylesApi } from '../services/api'
+import api, { projects, pipeline, styles as stylesApi } from '../services/api'
 
 const { Title, Text } = Typography
 const { TextArea } = Input
@@ -25,6 +25,12 @@ const getStyleDescription = (style) => (
   style?.description || fallbackStyleDescriptions[style?.name] || '使用该风格生成分镜、画面提示和音频方向。'
 )
 
+const SOURCE_TYPES = [
+  { key: 'text_split', label: '📝 文本拆分', desc: '输入长文本，AI 自动拆分成场景' },
+  { key: 'short_fiction', label: '📖 短篇小说', desc: '输入创作方向，AI 三明治 pipeline 自动生成' },
+  { key: 'play_world', label: '🌍 开放世界', desc: '交互式文字冒险，每回合推进剧情' },
+]
+
 const validateSourceTextLength = (_, value) => {
   const sourceText = (value || '').trim()
   if (!sourceText) {
@@ -44,7 +50,9 @@ const sourceTextRules = [
 export default function CreateProject() {
   const navigate = useNavigate()
   const [form] = Form.useForm()
+  const { message } = App.useApp()
   const [loading, setLoading] = useState(false)
+  const [sourceType, setSourceType] = useState('text_split')
   const [styleLoading, setStyleLoading] = useState(true)
   const [styleLoadError, setStyleLoadError] = useState('')
   const [writingStyles, setWritingStyles] = useState([])
@@ -93,9 +101,28 @@ export default function CreateProject() {
   const handleSubmit = async (values) => {
     setLoading(true)
     try {
-      const res = await projects.create(values)
+      const payload = { ...values, source_type: sourceType }
+      if (sourceType !== 'text_split') {
+        payload.direction = values.direction || ''
+        delete payload.source_text
+      }
+      const res = await projects.create(payload)
+      const projectId = res.data.id
       message.success('项目创建成功')
-      navigate(`/project/${res.data.id}`)
+
+      // Auto-start pipeline for text_split; for short_fiction the generate endpoint handles it
+      if (sourceType === 'text_split') {
+        await pipeline.run(projectId)
+        message.success('Pipeline 已启动')
+      } else if (sourceType === 'short_fiction') {
+        await api.post(`/projects/${projectId}/generate`, {
+          source_type: 'short_fiction',
+          chapter_count: 3,
+        })
+        message.success('短篇小说生成已启动')
+      }
+
+      navigate(`/project/${projectId}`)
     } catch (e) {
       const detail = e.response?.data?.detail
       const msg = Array.isArray(detail) ? detail[0]?.msg || '创建失败' : detail || '创建失败'
@@ -125,6 +152,26 @@ export default function CreateProject() {
           onFinish={handleSubmit}
           initialValues={{ style_writing: 'modern', style_visual: 'ink_wash', style_audio: 'ancient_male' }}
         >
+          <Form.Item label="生成方式">
+            <div style={{ display: 'flex', gap: 12 }}>
+              {SOURCE_TYPES.map(st => (
+                <div
+                  key={st.key}
+                  onClick={() => setSourceType(st.key)}
+                  style={{
+                    flex: 1, padding: 16, borderRadius: 8, cursor: 'pointer',
+                    background: sourceType === st.key ? 'var(--accent)' : 'var(--bg-card)',
+                    border: sourceType === st.key ? '2px solid var(--accent)' : '1px solid var(--border)',
+                    textAlign: 'center', transition: 'all 0.2s',
+                  }}
+                >
+                  <div style={{ fontSize: 16, marginBottom: 4 }}>{st.label}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{st.desc}</div>
+                </div>
+              ))}
+            </div>
+          </Form.Item>
+
           <Form.Item
             name="title"
             label="项目标题"
@@ -141,18 +188,38 @@ export default function CreateProject() {
             />
           </Form.Item>
 
-          <Form.Item name="source_text" label="输入文段" rules={sourceTextRules}>
-            <TextArea
-              rows={10}
-              placeholder={'粘贴你的小说/文段内容...\n\n支持直接粘贴小说片段，AI 会自动拆分为多个场景'}
-              style={{ fontSize: 15, lineHeight: 1.8 }}
-            />
-          </Form.Item>
-          <div className="source-text-meter">
-            <Text type={sourceTextLength >= minimumSceneTextLength ? 'success' : 'secondary'}>
-              已输入 {sourceTextLength} 字符，建议至少 {minimumSceneTextLength} 字符以便稳定拆分场景。
-            </Text>
-          </div>
+          {sourceType === 'text_split' ? (
+            <>
+              <Form.Item name="source_text" label="输入文段" rules={sourceTextRules}>
+                <TextArea
+                  rows={10}
+                  placeholder={'粘贴你的小说/文段内容...\n\n支持直接粘贴小说片段，AI 会自动拆分为多个场景'}
+                  style={{ fontSize: 15, lineHeight: 1.8 }}
+                />
+              </Form.Item>
+              <div className="source-text-meter">
+                <Text type={sourceTextLength >= minimumSceneTextLength ? 'success' : 'secondary'}>
+                  已输入 {sourceTextLength} 字符，建议至少 {minimumSceneTextLength} 字符以便稳定拆分场景。
+                </Text>
+              </div>
+            </>
+          ) : (
+            <Form.Item
+              name="direction"
+              label={sourceType === 'short_fiction' ? '创作方向' : '世界设定'}
+              rules={[{ required: true, message: sourceType === 'short_fiction' ? '请输入创作方向' : '请输入世界设定' }]}
+            >
+              <TextArea
+                rows={4}
+                placeholder={
+                  sourceType === 'short_fiction'
+                    ? '例如：古风爱情，主角是一位失忆的剑客，在竹林中遇到一位神秘女子...'
+                    : '例如：一个被遗弃在荒野中的旅人，周围是无尽的沙漠和废墟...'
+                }
+                style={{ fontSize: 15, lineHeight: 1.8 }}
+              />
+            </Form.Item>
+          )}
 
           {styleLoadError && (
             <Alert

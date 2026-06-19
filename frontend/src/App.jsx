@@ -1,5 +1,6 @@
 import React, { Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { App as AntdApp } from 'antd'
 import useStore from './stores/auth'
 
 const Login = React.lazy(() => import('./pages/Login'))
@@ -30,8 +31,9 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Suspense fallback={<RouteLoading />}>
-        <Routes>
+      <AntdApp>
+        <Suspense fallback={<RouteLoading />}>
+          <Routes>
           <Route path="/login" element={token ? <Navigate to="/" /> : <Login onLogin={() => window.location.href = '/'} />} />
           <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/create" element={<PrivateRoute><CreateProject /></PrivateRoute>} />
@@ -40,6 +42,7 @@ export default function App() {
           <Route path="/chat/project/:id" element={<PrivateRoute><ChatPage /></PrivateRoute>} />
         </Routes>
       </Suspense>
+      </AntdApp>
     </BrowserRouter>
   )
 }

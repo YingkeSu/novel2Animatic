@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Form, Input, Button, Card, message, Tabs, Typography } from 'antd'
+import { Form, Input, Button, Card, App, Tabs, Typography } from 'antd'
 import { auth } from '../services/api'
 import useStore from '../stores/auth'
 
@@ -18,6 +18,7 @@ const passwordRules = [
 export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false)
   const setToken = useStore((s) => s.setToken)
+  const { message } = App.useApp()
 
   const handleSubmit = async (values, isRegister) => {
     setLoading(true)

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Typography, Progress, Button, Space, Tag, message, Alert } from 'antd'
+import { Typography, Progress, Button, Space, Tag, App, Alert } from 'antd'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
 import api, { projects, pipeline, styles as stylesApi } from '../services/api'
 
@@ -21,6 +21,7 @@ const isNonTerminalTaskStatus = (status) => NON_TERMINAL_TASK_STATUSES.includes(
 export default function ProjectDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { message } = App.useApp()
   const [project, setProject] = useState(null)
   const [taskProgress, setTaskProgress] = useState(null)
   const [loading, setLoading] = useState(false)

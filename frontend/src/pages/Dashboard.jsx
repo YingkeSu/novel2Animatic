@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Button, Tag, Typography, message, Popconfirm, Tooltip } from 'antd'
+import { Button, Tag, Typography, App, Popconfirm, Tooltip } from 'antd'
 import {
   ExclamationCircleOutlined,
   ClockCircleOutlined,
@@ -54,6 +54,7 @@ export default function Dashboard() {
   const [styleMap, setStyleMap] = useState({})
   const navigate = useNavigate()
   const logout = useStore((s) => s.logout)
+  const { message } = App.useApp()
 
   const load = async () => {
     setLoading(true)
