@@ -106,13 +106,13 @@ export default function ChatPage() {
             const detail = await api.get(`/projects/${project.id}`)
             if (detail.data.status === 'done') {
               const scenes = detail.data.scenes || []
-              addMessage('assistant', `✅ 生成完成！共 ${scenes.length} 个场景`)
+              addMessage('assistant', `✅ 生成完成！共 ${scenes.length} 个场景。查看完整项目：/project/${project.id}`)
               for (const s of scenes) {
                 addMessage('system', `🎬 场景 ${s.seq}: ${s.title}\n${s.text?.substring(0, 100)}...`)
               }
               break
             } else if (detail.data.status === 'failed') {
-              addMessage('system', '❌ 生成失败')
+              addMessage('system', `❌ 生成失败: ${detail.data.latest_error_msg || '未知错误'}`)
               break
             }
           } catch (e) {
