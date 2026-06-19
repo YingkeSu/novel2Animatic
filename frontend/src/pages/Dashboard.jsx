@@ -232,7 +232,7 @@ export default function Dashboard() {
                 {project.status === 'failed' && project.latest_error_msg && (
                   <div className="dashboard-card-error" title={project.latest_error_msg}>
                     <ExclamationCircleOutlined />
-                    <Text>{project.latest_error_msg}</Text>
+                    <Text>{project.latest_error_msg.length > 80 ? project.latest_error_msg.substring(0, 80) + '...' : project.latest_error_msg}</Text>
                   </div>
                 )}
 
