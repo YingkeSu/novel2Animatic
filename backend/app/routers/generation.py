@@ -56,6 +56,14 @@ async def _run_short_fiction_generation(
     llm_fn = _make_llm_fn(client)
     gen = SceneGenerator(llm_fn=llm_fn)
 
+    # Create Task early so progress endpoint works during scene generation
+    async with async_session() as db:
+        task = Task(project_id=project_id, user_id=user_id, status="running", step="split_scenes", progress=10)
+        db.add(task)
+        await db.commit()
+        await db.refresh(task)
+        task_id = task.id
+
     try:
         gen_result = await gen.generate(
             direction=direction,
@@ -69,10 +77,15 @@ async def _run_short_fiction_generation(
             project = result.scalar_one_or_none()
             if project:
                 project.status = "failed"
-                await db.commit()
+            task_result = await db.execute(select(Task).where(Task.id == task_id))
+            task = task_result.scalar_one_or_none()
+            if task:
+                task.status = "failed"
+                task.error_msg = str(e)[:500]
+            await db.commit()
         return
 
-    # Save scenes and create task for media pipeline
+    # Save scenes
     async with async_session() as db:
         for scene_data in gen_result.scenes:
             scene = Scene(
@@ -88,12 +101,12 @@ async def _run_short_fiction_generation(
             )
             db.add(scene)
 
-        # Create a Task for media pipeline progress tracking
-        task = Task(project_id=project_id, user_id=user_id, status="running", step="generate_refs", progress=25)
-        db.add(task)
+        # Update task progress to media pipeline phase
+        task_result = await db.execute(select(Task).where(Task.id == task_id))
+        task = task_result.scalar_one()
+        task.step = "generate_refs"
+        task.progress = 25
         await db.commit()
-        await db.refresh(task)
-        task_id = task.id
 
     logger.info("Short fiction scenes generated for project %d: %d scenes, starting media pipeline",
                 project_id, len(gen_result.scenes))
