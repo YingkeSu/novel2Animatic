@@ -26,22 +26,37 @@ async def lifespan(app: FastAPI):
             select(Task).where(Task.status.in_(["running", "pending"]))
         )
         stuck_tasks = result.scalars().all()
-        if stuck_tasks:
-            task_ids = [t.id for t in stuck_tasks]
-            project_ids = list(set(t.project_id for t in stuck_tasks))
-            logger.warning("Recovering %d stuck tasks: %s", len(stuck_tasks), task_ids)
-            await db.execute(
-                update(Task).where(Task.id.in_(task_ids)).values(
-                    status="failed", error_msg="服务器重启，任务被中断"
+        task_ids = [t.id for t in stuck_tasks]
+        project_ids_from_tasks = list(set(t.project_id for t in stuck_tasks))
+
+        # Also find projects stuck in running with no active tasks
+        result2 = await db.execute(
+            select(Project).where(Project.status == "running")
+        )
+        running_projects = result2.scalars().all()
+        running_project_ids = [p.id for p in running_projects]
+        orphan_project_ids = [pid for pid in running_project_ids if pid not in project_ids_from_tasks]
+
+        all_project_ids = list(set(project_ids_from_tasks + orphan_project_ids))
+
+        if task_ids or orphan_project_ids:
+            if task_ids:
+                logger.warning("Recovering %d stuck tasks: %s", len(task_ids), task_ids)
+                await db.execute(
+                    update(Task).where(Task.id.in_(task_ids)).values(
+                        status="failed", error_msg="服务器重启，任务被中断"
+                    )
                 )
-            )
-            await db.execute(
-                update(Project).where(Project.id.in_(project_ids), Project.status == "running").values(
-                    status="failed"
+            if orphan_project_ids:
+                logger.warning("Recovering %d orphan running projects: %s", len(orphan_project_ids), orphan_project_ids)
+            if all_project_ids:
+                await db.execute(
+                    update(Project).where(Project.id.in_(all_project_ids), Project.status == "running").values(
+                        status="failed"
+                    )
                 )
-            )
             await db.commit()
-            logger.info("Recovered %d stuck tasks and %d projects", len(task_ids), len(project_ids))
+            logger.info("Recovered %d tasks and %d projects", len(task_ids), len(all_project_ids))
 
     yield
 
