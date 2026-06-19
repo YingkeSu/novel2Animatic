@@ -230,8 +230,20 @@ export default function ProjectDetail() {
   const handleRun = async () => {
     setLoading(true)
     try {
-      await pipeline.run(id)
-      message.success('Pipeline 已启动')
+      if (project?.source_type === 'short_fiction') {
+        await api.post(`/projects/${id}/generate`, {
+          source_type: 'short_fiction',
+          chapter_count: 3,
+        })
+        message.success('短篇小说生成已启动')
+      } else if (project?.source_type === 'play_world') {
+        message.info('开放世界项目请在 ChatPage 中继续交互')
+        setLoading(false)
+        return
+      } else {
+        await pipeline.run(id)
+        message.success('Pipeline 已启动')
+      }
       setProject(prev => prev ? { ...prev, status: 'running' } : prev)
       setTaskProgress(null)
       pollProgress()
