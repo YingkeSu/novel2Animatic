@@ -124,6 +124,40 @@ export default function Dashboard() {
         </div>
       </header>
 
+      {/* Quick Start — 三种生成方式入口 */}
+      <section className="dashboard-quick-start">
+        <Text className="dashboard-kicker">快速开始</Text>
+        <div className="dashboard-quick-grid">
+          <article
+            className="dashboard-quick-card"
+            onClick={() => navigate('/chat', { state: { sourceType: 'text_split' } })}
+            tabIndex={0}
+          >
+            <span className="quick-card-icon">📝</span>
+            <Title level={4} className="quick-card-title">文本拆分</Title>
+            <Text className="quick-card-desc">输入长文本，AI 自动拆分成场景，生成分镜、画面、音频和成片</Text>
+          </article>
+          <article
+            className="dashboard-quick-card"
+            onClick={() => navigate('/chat', { state: { sourceType: 'short_fiction' } })}
+            tabIndex={0}
+          >
+            <span className="quick-card-icon">📖</span>
+            <Title level={4} className="quick-card-title">短篇小说</Title>
+            <Text className="quick-card-desc">输入创作方向，AI 三明治 pipeline 自动生成完整故事场景</Text>
+          </article>
+          <article
+            className="dashboard-quick-card"
+            onClick={() => navigate('/chat', { state: { sourceType: 'play_world' } })}
+            tabIndex={0}
+          >
+            <span className="quick-card-icon">🌍</span>
+            <Title level={4} className="quick-card-title">开放世界</Title>
+            <Text className="quick-card-desc">交互式文字冒险，每回合推进剧情，实时生成场景画面</Text>
+          </article>
+        </div>
+      </section>
+
       {loading ? (
         <section className="dashboard-loading" aria-live="polite" aria-busy="true">
           <div className="dashboard-loading-copy">
