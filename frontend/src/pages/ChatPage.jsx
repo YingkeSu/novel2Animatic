@@ -302,7 +302,7 @@ export default function ChatPage() {
                 )}
                 {sourceType === 'text_split' && (
                   <>
-                    <button onClick={() => setInput('在这里粘贴你的小说/文段内容，至少80个字符...')}>📝 粘贴文本</button>
+                    <button onClick={() => setInput('从前有一座山，山上有一座庙，庙里住着一个老和尚和一个小和尚。老和尚对小和尚说，从前有一座山，山上有一座庙，庙里住着一个老和尚和一个小和尚。日复一日，年复一年，春夏秋冬，四季轮回，故事代代相传。')}>📝 粘贴文本</button>
                     <button onClick={() => navigate('/create')}>⚙️ 高级创建</button>
                   </>
                 )}
