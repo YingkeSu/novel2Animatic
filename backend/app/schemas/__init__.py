@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.services.style_engine import list_styles
 
@@ -49,7 +49,9 @@ class TokenResponse(BaseModel):
 # Project
 class ProjectCreate(BaseModel):
     title: str
-    source_text: str
+    source_text: str = ""
+    source_type: str = "text_split"
+    direction: str = ""
     style_writing: str = "modern"
     style_visual: str = "ink_wash"
     style_audio: str = "ancient_male"
@@ -67,12 +69,25 @@ class ProjectCreate(BaseModel):
     @field_validator("source_text")
     @classmethod
     def source_text_valid(cls, v: str) -> str:
-        source_text = v.strip() if v else ""
-        if not source_text:
-            raise ValueError("文段不能为空")
-        if len(source_text) < 80:
-            raise ValueError("文段至少需要80个字符")
-        return source_text
+        return v.strip() if v else ""
+
+    @field_validator("source_type")
+    @classmethod
+    def source_type_valid(cls, v: str) -> str:
+        valid = {"text_split", "short_fiction", "play_world"}
+        if v not in valid:
+            raise ValueError(f"不支持的场景来源类型，可选: {', '.join(valid)}")
+        return v
+
+    @model_validator(mode="after")
+    def validate_source_text_for_text_split(self):
+        if self.source_type == "text_split":
+            text = self.source_text.strip() if self.source_text else ""
+            if not text:
+                raise ValueError("文段不能为空")
+            if len(text) < 80:
+                raise ValueError("文段至少需要80个字符")
+        return self
 
     @field_validator("style_writing")
     @classmethod
@@ -102,6 +117,7 @@ class ProjectResponse(BaseModel):
     id: int
     title: str
     status: str
+    source_type: str = "text_split"
     style_writing: str
     style_visual: str
     style_audio: str

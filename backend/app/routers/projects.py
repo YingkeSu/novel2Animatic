@@ -33,6 +33,8 @@ async def create_project(
         user_id=user.id,
         title=req.title,
         source_text=req.source_text,
+        source_type=req.source_type,
+        direction=req.direction,
         style_writing=req.style_writing,
         style_visual=req.style_visual,
         style_audio=req.style_audio,

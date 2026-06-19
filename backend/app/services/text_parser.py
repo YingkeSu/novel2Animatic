@@ -29,8 +29,8 @@ class TagParseError(Exception):
     pass
 
 
-# Pattern for === TAG_NAME === format
-_TAG_PATTERN = re.compile(r"^===\s*(.+?)\s*===$", re.MULTILINE)
+# Pattern for === TAG_NAME === format (also accepts == TAG_NAME ==)
+_TAG_PATTERN = re.compile(r"^={2,3}\s*(.+?)\s*={2,3}$", re.MULTILINE)
 
 # Pattern for ## TAG_NAME fallback (Markdown headers)
 _MD_HEADER_PATTERN = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)

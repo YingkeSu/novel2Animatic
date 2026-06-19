@@ -53,7 +53,8 @@ class WorldEngine:
         # result.scene_text, result.suggested_actions, result.to_scene_dict()
     """
 
-    def __init__(self) -> None:
+    def __init__(self, llm_fn=None) -> None:
+        self.llm_fn = llm_fn
         self.interpreter_temp = 0.15
         self.mutator_temp = 0.25
         self.renderer_temp = 0.45
@@ -142,24 +143,66 @@ class WorldEngine:
             action_kind=action_kind,
         )
 
+    async def _call_llm(self, messages, temperature=0.7, **kwargs):
+        """Call the LLM function."""
+        if not self.llm_fn:
+            raise RuntimeError("No llm_fn provided to WorldEngine")
+        return await self.llm_fn(messages, temperature=temperature, **kwargs)
+
     async def _interpret(self, raw_input: str, context: str) -> Dict[str, Any]:
         """Step 1: Normalize player input into structured action."""
-        raise NotImplementedError("LLM integration pending — mock this for tests")
+        messages = [
+            {"role": "system", "content": "你是一个游戏动作解析器。将玩家输入解析为结构化动作。输出JSON格式：{\"action_kind\": \"look/say/move/do/wait\", \"intent\": \"意图描述\"}"},
+            {"role": "user", "content": f"当前场景：{context}\n玩家输入：{raw_input}\n\n请解析为JSON："},
+        ]
+        result = await self._call_llm(messages, temperature=self.interpreter_temp)
+        import json as _json
+        try:
+            return _json.loads(result)
+        except _json.JSONDecodeError:
+            return {"action_kind": "do", "intent": raw_input}
 
     async def _mutate(
         self, turn: int, raw_input: str, action: Dict[str, Any], context: str
     ) -> Dict[str, Any]:
         """Step 2: Generate world state mutations from the action."""
-        raise NotImplementedError("LLM integration pending — mock this for tests")
+        import json as _json
+        messages = [
+            {"role": "system", "content": "你是一个世界状态管理器。根据玩家动作生成状态变化。输出JSON格式：{\"entities\": {\"upsert\": []}, \"edges\": {\"upsert\": [], \"expire\": []}, \"state_slots\": {\"upsert\": []}, \"summary\": \"变化摘要\"}"},
+            {"role": "user", "content": f"回合：{turn}\n场景：{context}\n玩家动作：{action}\n\n请生成状态变化JSON："},
+        ]
+        result = await self._call_llm(messages, temperature=self.mutator_temp)
+        try:
+            return _json.loads(result)
+        except _json.JSONDecodeError:
+            return {"entities": {"upsert": []}, "edges": {"upsert": [], "expire": []}, "state_slots": {"upsert": []}, "summary": result[:100]}
 
     async def _render(
         self, raw_input: str, action: Dict[str, Any], mutation_summary: str, state_brief: str
     ) -> Dict[str, Any]:
         """Step 3: Render scene text and suggested actions."""
-        raise NotImplementedError("LLM integration pending — mock this for tests")
+        import json as _json
+        messages = [
+            {"role": "system", "content": "你是一个场景渲染器。根据动作和状态变化生成生动的场景描述。输出JSON格式：{\"scene_text\": \"场景描述\", \"suggested_actions\": [\"建议1\", \"建议2\", \"建议3\"]}"},
+            {"role": "user", "content": f"场景：{state_brief}\n玩家动作：{action}\n状态变化：{mutation_summary}\n\n请渲染场景JSON："},
+        ]
+        result = await self._call_llm(messages, temperature=self.renderer_temp)
+        try:
+            return _json.loads(result)
+        except _json.JSONDecodeError:
+            return {"scene_text": result, "suggested_actions": ["继续探索", "查看四周", "休息"]}
 
     async def _reconcile(
         self, mutation: Dict[str, Any], scene_text: str, state_brief: str
     ) -> Dict[str, Any]:
         """Step 4: Cross-check scene text against world graph, supplement missing entities."""
-        raise NotImplementedError("LLM integration pending — mock this for tests")
+        import json as _json
+        messages = [
+            {"role": "system", "content": "你是一个场景校验器。检查场景文本是否与世界状态一致，补充遗漏的实体。输出JSON格式：{\"entities\": {\"upsert\": []}, \"edges\": {\"upsert\": []}}"},
+            {"role": "user", "content": f"世界状态：{state_brief}\n状态变化：{mutation}\n场景文本：{scene_text}\n\n请校验并补充JSON："},
+        ]
+        result = await self._call_llm(messages, temperature=self.reconciler_temp)
+        try:
+            return _json.loads(result)
+        except _json.JSONDecodeError:
+            return {"entities": {"upsert": []}, "edges": {"upsert": []}}
