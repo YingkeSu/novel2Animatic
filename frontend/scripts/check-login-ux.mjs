@@ -11,6 +11,7 @@ const requiredSnippets = [
   'type: \'email\'',
   'min: 8',
   '密码至少8位',
+  'App.useApp',
 ]
 
 const missing = requiredSnippets.filter((snippet) => !login.includes(snippet))
