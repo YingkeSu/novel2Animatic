@@ -84,6 +84,9 @@ class SceneGenerator:
         logger.info("Stage 3: Revising outline")
         if outline_review.strip():
             outline_v2 = await self._revise_text(outline_v1, outline_review, "outline")
+            if not outline_v2.strip():
+                logger.warning("Outline revision empty, using original outline")
+                outline_v2 = outline_v1
         else:
             logger.warning("Outline review empty, skipping revision")
             outline_v2 = outline_v1
@@ -91,6 +94,9 @@ class SceneGenerator:
         # Stage 4: Write draft
         logger.info("Stage 4: Writing draft")
         draft_v1 = await self._write_draft(outline_v2, chapters)
+        if not draft_v1.strip():
+            logger.warning("Draft empty, retrying with original outline")
+            draft_v1 = await self._write_draft(outline_v1, chapters)
 
         # Stage 5: Review draft
         logger.info("Stage 5: Reviewing draft")
@@ -101,7 +107,11 @@ class SceneGenerator:
         if draft_review.strip():
             try:
                 draft_v2 = await self._revise_text(draft_v1, draft_review, "draft")
-                final_draft = draft_v2
+                if draft_v2.strip():
+                    final_draft = draft_v2
+                else:
+                    logger.warning("Draft revision empty, preserving first draft")
+                    final_draft = draft_v1
             except Exception as e:
                 logger.warning("Draft revision failed, preserving first draft: %s", e)
                 final_draft = draft_v1
