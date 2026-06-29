@@ -71,7 +71,8 @@ async def _run_short_fiction_generation(
             chars_per_chapter=chars_per_chapter,
         )
     except Exception as e:
-        logger.error("Scene generation failed for project %d: %s", project_id, e)
+        from app.services.errors import log_pipeline_error
+        sanitized = log_pipeline_error(e, task_id=task_id, project_id=project_id)
         async with async_session() as db:
             result = await db.execute(select(Project).where(Project.id == project_id))
             project = result.scalar_one_or_none()
@@ -81,7 +82,7 @@ async def _run_short_fiction_generation(
             task = task_result.scalar_one_or_none()
             if task:
                 task.status = "failed"
-                task.error_msg = str(e)[:500]
+                task.error_msg = sanitized
             await db.commit()
         return
 
@@ -231,13 +232,14 @@ async def _run_short_fiction_generation(
         logger.info("Short fiction pipeline complete for project %d", project_id)
 
     except Exception as e:
-        logger.error("Media pipeline failed for project %d: %s", project_id, e)
+        from app.services.errors import log_pipeline_error
+        sanitized = log_pipeline_error(e, task_id=task_id, project_id=project_id)
         async with async_session() as db:
             task_result = await db.execute(select(Task).where(Task.id == task_id))
             task = task_result.scalar_one_or_none()
             if task:
                 task.status = "failed"
-                task.error_msg = str(e)[:500]
+                task.error_msg = sanitized
 
             project_result = await db.execute(select(Project).where(Project.id == project_id))
             project = project_result.scalar_one_or_none()
@@ -319,8 +321,9 @@ async def play_world_turn(
             context=context,
         )
     except Exception as e:
-        logger.error("World turn failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"回合失败: {e}")
+        from app.services.errors import log_play_error
+        detail = log_play_error(e, project_id=project_id)
+        raise HTTPException(status_code=500, detail=detail)
 
     # Save scene to DB
     scene_dict = turn_result.to_scene_dict()

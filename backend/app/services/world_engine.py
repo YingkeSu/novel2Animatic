@@ -91,13 +91,15 @@ class WorldEngine:
         try:
             mutation = await self._mutate(turn, raw_input, action, context)
         except Exception as e:
-            logger.warning("Mutation failed: %s", e)
+            # Log the full exception server-side; never expose raw internals in
+            # the narration that gets returned to the client via /play.
+            logger.warning("Mutation failed for world %s: %r", world_id, e, exc_info=True)
             mutation = {
                 "entities": {"upsert": []},
                 "edges": {"upsert": [], "expire": []},
                 "state_slots": {"upsert": []},
                 "blocked": True,
-                "blocked_reason": str(e),
+                "blocked_reason": "模型输出无法解析",
                 "summary": "模型输出无法解析",
             }
 

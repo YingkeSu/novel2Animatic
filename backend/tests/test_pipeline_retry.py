@@ -188,4 +188,7 @@ async def test_run_pipeline_task_fails_after_max_retries(db_session_factory, tmp
         task = await db.get(Task, task_id)
 
     assert task.status == "failed"
-    assert "timed out" in (task.error_msg or "").lower() or "TimeoutError" in (task.error_msg or "")
+    # error_msg is sanitized: generic message, no raw timeout/exception details.
+    assert task.error_msg == "生成失败，请稍后重试。"
+    assert "timed out" not in (task.error_msg or "").lower()
+    assert "TimeoutError" not in (task.error_msg or "")

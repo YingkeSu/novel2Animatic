@@ -231,10 +231,11 @@ async def run_pipeline_task(task_id: int):
             await db.commit()
 
         except Exception as e:
+            from app.services.errors import log_pipeline_error
             await db.rollback()
             await cleanup_pipeline_outputs(db, user_id, project_id)
             task.status = "failed"
-            task.error_msg = str(e)[:500]
+            task.error_msg = log_pipeline_error(e, task_id=task_id, project_id=project_id)
             project.status = "failed"
             await db.commit()
 

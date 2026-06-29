@@ -88,7 +88,7 @@ async def test_progress_endpoint_returns_retry_info(client, db_session_factory):
         await db.flush()
         task = Task(project_id=project.id, user_id=user.id,
                     status="failed", step="generate_audio", progress=65,
-                    error_msg="Rate limit exceeded")
+                    error_msg="生成失败，请稍后重试。")
         db.add(task)
         await db.commit()
         project_id = project.id
@@ -99,4 +99,5 @@ async def test_progress_endpoint_returns_retry_info(client, db_session_factory):
     assert data["status"] == "failed"
     assert data["step"] == "generate_audio"
     assert data["progress"] == 65
-    assert data["error_msg"] == "Rate limit exceeded"
+    # error_msg is sanitized — a generic, leak-free message.
+    assert data["error_msg"] == "生成失败，请稍后重试。"
