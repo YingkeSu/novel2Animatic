@@ -62,7 +62,7 @@ Vite serves the React app at `http://localhost:3000` and proxies `/api` to `http
 - `backend/styles/`: YAML style plugins grouped by `writing`, `visual`, and `audio`.
 - `docker-compose.yml`: local PostgreSQL and Redis services.
 
-The current implementation stores metadata in PostgreSQL and generated files on local disk. `ARCHITECTURE.md` describes a broader target architecture with Celery, Redis-backed jobs, SSE, and MinIO; those pieces are not fully wired into the current runtime.
+The current implementation stores metadata in PostgreSQL and generated files on local disk. `ARCHITECTURE.md` describes a broader target architecture with Celery, Redis-backed jobs, SSE, and MinIO; those pieces are not fully wired into the current runtime. The pipeline runs in-process via `asyncio.create_task` (no external worker), passwords use PBKDF2 (not bcrypt), only JWT access tokens are issued (no refresh tokens), and progress is polled via `/api/projects/{id}/progress` (SSE exists but is not on the active generation path). For the authoritative description of the current runtime, see [`CLAUDE.md`](./CLAUDE.md); where `ARCHITECTURE.md` and `CLAUDE.md` disagree, `CLAUDE.md` is the source of truth.
 
 ## Environment Variables
 
