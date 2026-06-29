@@ -1,27 +1,34 @@
 # novel2Animatic — 技术架构方案
 
+> ⚠️ **本文档为「目标 / 设计方案」，并非当前运行时事实。**
+> 当前实现使用：**进程内 `asyncio.create_task` 执行 pipeline**（无 Celery worker）、**PBKDF2 (`pbkdf2_sha256`) 密码哈希**、**access token only（无 refresh token）**、**本地磁盘存储**（`backend/storage/{user_id}/{project_id}/`）、**进度通过 `GET /api/projects/{id}/progress` 轮询**（SSE `event_bus`/`/events` 存在但未接入主动生成路径）。
+> 下文凡涉及 Celery / Redis worker / MinIO / bcrypt / refresh token / 速率限制 / 队列优先级等，均为**规划中的目标**（追踪于 #1），**未接入运行时**。
+> **运行时事实的唯一来源是仓库根目录的 [`CLAUDE.md`](./CLAUDE.md)**；本文档与 `CLAUDE.md` 冲突时，以 `CLAUDE.md` 为准。
+
 ## 一、项目定位
 
 将网络小说/文段自动转化为 AI 手书短剧（静态图 + 配音旁白 + 视频），支持文风/画风/音频风格插件切换，多用户隔离。
 
-MVP 并发：常态 5，峰值 20。
+MVP 并发：常态 5，峰值 20（目标值；当前为进程内执行，无外部并发控制）。
 
 ---
 
 ## 二、整体架构
+
+下图为目标/设计架构。**当前运行时**的差异见文首说明：无 Celery worker、无 Redis 队列、无 MinIO（生成文件存本地磁盘）、进度经 `/api/projects/{id}/progress` 轮询而非 SSE。
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                  前端 (React + Vite)                      │
 │  登录/注册 │ 项目列表 │ 创作工作台 │ 风格选择 │ 进度/预览  │
 └────────────────────────┬────────────────────────────────┘
-                         │ REST API / SSE(进度推送)
+                         │ REST API / SSE(进度推送)¹
 ┌────────────────────────▼────────────────────────────────┐
-│              后端 (FastAPI + Celery + Redis)               │
+│       后端 (FastAPI + Celery + Redis)²                     │
 │                                                           │
 │  ┌─────────┐  ┌──────────┐  ┌─────────────────────────┐  │
 │  │ Auth    │  │ Project  │  │ Pipeline Orchestrator    │  │
-│  │ JWT/RBAC│  │ CRUD     │  │ (Celery chain)           │  │
+│  │ JWT/RBAC│  │ CRUD     │  │ (Celery chain)²          │  │
 │  └─────────┘  └──────────┘  └─────────────────────────┘  │
 │                                                           │
 │  ┌───────────────────────────────────────────────────┐    │
@@ -36,33 +43,39 @@ MVP 并发：常态 5，峰值 20。
 │                                                           │
 │  ┌───────────┐  ┌─────────────┐  ┌──────────────────┐    │
 │  │ Style     │  │ FFmpeg      │  │ Progress Tracker │    │
-│  │ Plugin    │  │ Video Asm   │  │ (Redis + SSE)    │    │
+│  │ Plugin    │  │ Video Asm   │  │ (Redis + SSE)¹   │    │
 │  │ System    │  │             │  │                   │    │
 │  └───────────┘  └─────────────┘  └──────────────────┘    │
 └────────────────────────────┬─────────────────────────────┘
                              │
 ┌────────────────────────────▼─────────────────────────────┐
 │                       存储层                              │
-│  PostgreSQL (用户/项目/任务)  │  MinIO (图片/音频/视频)    │
+│  PostgreSQL (用户/项目/任务)  │  MinIO (图片/音频/视频)³   │
 └──────────────────────────────────────────────────────────┘
 ```
+
+¹ **SSE 未接入主动生成路径**：`event_bus` + `/api/.../events` 路由存在，但当前 pipeline 进度通过 `GET /api/projects/{id}/progress` 轮询（见 `backend/app/routers/pipeline.py`、`backend/app/routers/events.py`）。
+² **无 Celery worker / 无 Redis 队列**：pipeline 以 `asyncio.create_task` 在进程内执行（`backend/app/routers/pipeline.py`、`backend/app/routers/generation.py`）；服务重启会中断活动任务，`lifespan` 将 `running`/`pending` 任务与孤儿项目标记为 `failed`（`backend/app/main.py`）。
+³ **无 MinIO**：生成文件写入本地磁盘 `backend/storage/{user_id}/{project_id}/`（`backend/app/services/pipeline.py`、`backend/app/routers/{pipeline,generation,assets,projects}.py` 的 `STORAGE_DIR`）。
 
 ---
 
 ## 三、技术栈
 
-| 层       | 选型                         | 说明                          |
-|----------|------------------------------|-------------------------------|
-| 前端     | React + Vite + Ant Design    | SPA, 快速开发                 |
-| 后端框架  | FastAPI                      | 异步, 高性能, OpenAPI 自带文档 |
-| 任务队列  | Celery + Redis               | 并发控制, 重试, 链式任务       |
-| 数据库   | PostgreSQL                   | 多用户隔离, JSON 字段灵活      |
-| 对象存储  | MinIO (兼容 S3)              | 图片/音频/视频存储             |
-| LLM      | StepFun step-3.7-flash       | 拆场景 + 文风变换              |
-| 图像     | StepFun step-image-edit-2    | 场景图生成                     |
-| TTS      | StepFun stepaudio-2.5-tts    | 旁白音频                       |
-| 视频合成  | ffmpeg                       | 图片+音频→mp4→concat          |
-| 进度推送  | SSE (Server-Sent Events)     | 实时进度                       |
+> 下表「状态」列标注各项是否接入当前运行时。**运行时事实以 [`CLAUDE.md`](./CLAUDE.md) 为准。**
+
+| 层       | 选型                         | 说明                          | 状态 |
+|----------|------------------------------|-------------------------------|------|
+| 前端     | React + Vite + Ant Design    | SPA, 快速开发                 | 已实现 |
+| 后端框架  | FastAPI                      | 异步, 高性能, OpenAPI 自带文档 | 已实现 |
+| 任务队列  | Celery + Redis               | 并发控制, 重试, 链式任务       | 🚧 规划中（运行时为进程内 `asyncio.create_task`，见 `app/main.py` / `app/routers/pipeline.py`） |
+| 数据库   | PostgreSQL                   | 多用户隔离, JSON 字段灵活      | 已实现 |
+| 对象存储  | MinIO (兼容 S3)              | 图片/音频/视频存储             | 🚧 规划中（运行时为本地磁盘 `backend/storage/`，见 `app/services/pipeline.py`） |
+| LLM      | StepFun step-3.7-flash       | 拆场景 + 文风变换              | 已实现 |
+| 图像     | StepFun step-image-edit-2    | 场景图生成                     | 已实现 |
+| TTS      | StepFun stepaudio-2.5-tts    | 旁白音频                       | 已实现 |
+| 视频合成  | ffmpeg                       | 图片+音频→mp4→concat          | 已实现 |
+| 进度推送  | SSE (Server-Sent Events)     | 实时进度                       | 🚧 规划中（`event_bus`/`/events` 存在但未接入主动路径；运行时为 `/progress` 轮询，见 `app/routers/pipeline.py`） |
 
 ---
 
@@ -134,8 +147,12 @@ TTS_MODEL   = "stepaudio-2.5-tts"
     工具: ffmpeg (每个场景图+音频→segment, 再 concat)
 ```
 
-Celery 链式执行：
+### 运行时执行模型（事实）
+
+> 以下 Celery 链为**规划中的目标**（追踪于 #1），**未接入运行时**。
+
 ```python
+# 规划目标（未实现）：Celery 链式执行
 chain(
     split_scenes.s(input_text, style_id),
     generate_refs.s(),
@@ -144,6 +161,13 @@ chain(
     assemble_video.s()
 ).apply_async()
 ```
+
+**当前运行时**：pipeline 五步在同一个 FastAPI 进程内、由一条协程顺序执行。`POST /api/projects/{id}/run` 与 `POST /api/projects/{id}/generate` 各自以 `asyncio.create_task(...)` 派发后台协程（见 `backend/app/routers/pipeline.py:62`、`backend/app/routers/generation.py:274`），步骤间通过 `Task` 表持久化进度，前端轮询 `GET /api/projects/{id}/progress`。无外部 worker、无重试队列、无并发控制；服务重启会中断活动任务，`lifespan` 在启动时将它们标记为 `failed`（`backend/app/main.py`）。
+
+三种生成模式（详见 `CLAUDE.md` 的「Three generation modes」表）：
+- `text_split` — `POST /api/projects/{id}/run`，`services/pipeline.run_pipeline_task`。
+- `short_fiction` — `POST /api/projects/{id}/generate`，`routers/generation._run_short_fiction_generation`（内联实现步骤 2–5）。
+- `play_world` — `POST /api/projects/{id}/play`，`services/world_engine.WorldEngine.step`（同步、单场景、不走媒体 pipeline）。
 
 ---
 
@@ -260,15 +284,17 @@ storage/
 
 ### 7.3 并发控制
 
+> 以下为**规划中的目标**（追踪于 #1），**未接入运行时**。当前 pipeline 在进程内以 `asyncio.create_task` 执行，无 Celery worker、无速率限制中间件、无队列优先级。
+
 ```python
-# Celery worker 配置
+# 规划目标（未实现）：Celery worker 配置
 CELERY_WORKER_CONCURRENCY = 5      # 常态
 CELERY_WORKER_MAX_CONCURRENCY = 20 # 峰值
 
-# 速率限制 (FastAPI middleware)
+# 规划目标（未实现）：速率限制 (FastAPI middleware)
 RATE_LIMIT = "5/s/user"  # API 请求限流
 
-# 队列优先级
+# 规划目标（未实现）：队列优先级
 CELERY_TASK_ROUTES = {
     'pipeline.split_scenes': {'queue': 'llm'},
     'pipeline.generate_images': {'queue': 'image'},
@@ -279,13 +305,19 @@ CELERY_TASK_ROUTES = {
 
 ### 7.4 认证
 
-- JWT token (access + refresh)
-- bcrypt 密码哈希
-- FastAPI Depends 注入当前用户
+> 以下为**运行时事实**（见 `backend/app/services/auth.py`）。
+
+- JWT **access token only**（**无 refresh token**）；通过 FastAPI `Depends(get_current_user)` 注入当前用户。
+- 密码哈希使用 **PBKDF2**（`pbkdf2_sha256`，600k 迭代），**不是 bcrypt**；实现见 `backend/app/services/auth.py:hash_password` / `verify_password`。
+- access token 有效期由 `ACCESS_TOKEN_EXPIRE_MINUTES` 控制（默认 15 分钟，必须为正整数）。
 
 ---
 
 ## 八、项目目录结构
+
+> 下图为目标结构，供参考。**当前运行时差异**：`app/tasks/` 并非 Celery 任务目录——`app/tasks/pipeline.py` 仅是一行 `from app.services.pipeline import run_pipeline_task` 的薄封装（见 `CLAUDE.md`），真实逻辑在 `app/services/pipeline.py`。实际路由与文件以仓库为准。
+
+
 
 ```
 novel2Animatic/
@@ -353,9 +385,9 @@ novel2Animatic/
 ### Auth
 ```
 POST /api/auth/register     注册
-POST /api/auth/login        登录 → JWT
-POST /api/auth/refresh      刷新 token
+POST /api/auth/login        登录 → access token (无 refresh token)
 ```
+> 文档中曾列出的 `POST /api/auth/refresh` **未实现**（access token only，见 `backend/app/routers/auth.py`）。
 
 ### Projects
 ```
@@ -367,10 +399,12 @@ DELETE /api/projects/{id}     删除
 
 ### Pipeline
 ```
-POST   /api/projects/{id}/run       启动 pipeline
-GET    /api/projects/{id}/progress  SSE 进度推送
-POST   /api/projects/{id}/cancel    取消
+POST   /api/projects/{id}/run       启动 pipeline (text_split)
+POST   /api/projects/{id}/generate  short_fiction 生成
+POST   /api/projects/{id}/play      play_world 单回合 (同步)
+GET    /api/projects/{id}/progress  轮询进度 (HTTP 轮询, 非 SSE)
 ```
+> 进度通过普通 HTTP `GET` 轮询（`backend/app/routers/pipeline.py`），**不是** SSE。`POST /api/projects/{id}/cancel` **未实现**。
 
 ### Styles
 ```
@@ -392,30 +426,30 @@ GET    /api/projects/{id}/assets/{scene_id}/{type}  下载资产
 
 ### Phase 1 — 核心 Pipeline（最小可用）
 - [x] StepFun API 客户端封装
-- [ ] FastAPI 后端骨架 + JWT 认证
-- [ ] PostgreSQL 模型 (User, Project, Scene, Asset)
-- [ ] Celery 五步 pipeline (拆场景→参考图→场景图→TTS→视频)
-- [ ] React 前端: 登录 + 创建项目 + 查看结果
-- [ ] Docker Compose 一键启动
+- [x] FastAPI 后端骨架 + JWT 认证（access token only，PBKDF2 哈希；无 refresh token）
+- [x] PostgreSQL 模型 (User, Project, Scene, Asset, Task)
+- [x] 五步 pipeline (拆场景→参考图→场景图→TTS→视频) — **进程内 `asyncio.create_task` 执行，非 Celery**
+- [x] React 前端: 登录 + 创建项目 + 查看结果
+- [x] Docker Compose 一键启动 (postgres + redis)
 
 ### Phase 2 — 风格插件
-- [ ] 插件 YAML 加载引擎
-- [ ] 内置文风: 古风/现代/武侠/玄幻
-- [ ] 内置画风: 水墨/动漫/写实/赛博
-- [ ] 内置音频风格: 古风男声/现代女声/热血少年
-- [ ] 前端风格选择器
+- [x] 插件 YAML 加载引擎 (`services/style_engine.py`)
+- [x] 内置文风/画风/音频风格插件 (`backend/styles/`)
+- [x] 前端风格选择器
 - [ ] 用户自定义插件上传
 
-### Phase 3 — 生产化
-- [ ] MinIO 对象存储
-- [ ] 并发控制 (rate limit + queue priority)
-- [ ] SSE 实时进度推送
-- [ ] 错误恢复 + 重试
+### Phase 3 — 生产化（规划中，追踪于 #1）
+- [ ] MinIO 对象存储（当前为本地磁盘）
+- [ ] 并发控制 (rate limit + queue priority)（当前无）
+- [ ] SSE 实时进度推送（`event_bus`/`/events` 存在但未接入主动路径；当前为 `/progress` 轮询）
+- [ ] 错误恢复 + 重试（当前服务重启即中断活动任务）
 - [ ] 管理后台 (用户管理 + 任务监控)
 
 ---
 
 ## 十一、依赖清单
+
+> 以下为 `backend/requirements.txt` 中声明的依赖（部分为**规划中目标**预留，运行时未必接入）。例如 `celery[redis]`、`redis`、`minio` 已声明但**未在主动路径使用**；`passlib[bcrypt]` 未使用——运行时密码哈希为 PBKDF2（`hashlib.pbkdf2_hmac`，见 `app/services/auth.py`）。以实际代码为准。
 
 ### 后端
 ```
