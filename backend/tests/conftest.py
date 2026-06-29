@@ -18,7 +18,7 @@ os.environ.setdefault("STEPFUN_API_KEY", "test-stepfun-api-key")
 
 from app.database import Base, get_db
 from app.config import get_settings
-from app.routers import auth, projects, pipeline, styles, assets, events, generation
+from app.routers import auth, projects, pipeline, styles, assets, events, generation, services
 
 TEST_DATABASE_URL = "postgresql+asyncpg://novel2animatic:novel2animatic@localhost:5432/novel2animatic_test"
 
@@ -50,6 +50,7 @@ def _build_test_app() -> FastAPI:
     test_app.include_router(assets.router)
     test_app.include_router(events.router)
     test_app.include_router(generation.router)
+    test_app.include_router(services.router)
 
     @test_app.get("/health")
     async def health():

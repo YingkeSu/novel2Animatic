@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, update
 
 from app.config import get_settings
-from app.routers import auth, projects, pipeline, styles, assets, events, generation
+from app.routers import auth, projects, pipeline, styles, assets, events, generation, services
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +79,7 @@ app.include_router(styles.router)
 app.include_router(assets.router)
 app.include_router(events.router)
 app.include_router(generation.router)
+app.include_router(services.router)
 
 
 @app.get("/health")

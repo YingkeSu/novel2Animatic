@@ -148,3 +148,73 @@ class ProgressResponse(BaseModel):
     step: str
     progress: int
     error_msg: Optional[str] = None
+
+
+# ── Model services (issue #3) ───────────────────────────────────────
+# Either a preset_id (build from a known preset) OR explicit custom fields.
+
+_SERVICE_GROUPS = {"overseas", "china", "aggregator", "custom"}
+_SERVICE_API_FORMATS = {"openai_chat", "openai_responses", "anthropic"}
+
+
+class ServiceCreate(BaseModel):
+    """Create a registered model service.
+
+    Two modes:
+    - preset: pass ``preset_id`` + ``api_key`` (other fields come from the preset).
+    - custom: pass ``name``/``group``/``base_url``/``api_key``/``api_format``.
+    """
+    preset_id: Optional[str] = None
+    name: Optional[str] = None
+    group: Optional[str] = None
+    base_url: Optional[str] = None
+    api_key: str = Field(min_length=1)
+    api_format: str = "openai_chat"
+    stream: bool = True
+    models: list[str] = Field(default_factory=list)
+
+    @field_validator("group")
+    @classmethod
+    def _valid_group(cls, v):
+        if v is not None and v not in _SERVICE_GROUPS:
+            raise ValueError("invalid group")
+        return v
+
+    @field_validator("api_format")
+    @classmethod
+    def _valid_format(cls, v):
+        if v not in _SERVICE_API_FORMATS:
+            raise ValueError("invalid api_format")
+        return v
+
+    @model_validator(mode="after")
+    def _either_preset_or_custom(self):
+        if self.preset_id:
+            return self
+        missing = [f for f in ("name", "group", "base_url") if not getattr(self, f)]
+        if missing:
+            raise ValueError(f"custom service missing fields: {missing}")
+        return self
+
+
+class ServiceResponse(BaseModel):
+    id: int
+    name: str
+    group: str
+    base_url: str
+    api_key: str  # masked
+    api_format: str
+    stream: bool
+    models: list[str] = Field(default_factory=list)
+    config: dict = Field(default_factory=dict)
+    is_preset: bool
+    probed_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+
+class ServiceProbeResponse(BaseModel):
+    success: bool
+    api_format: str
+    stream_support: bool
+    models: list[str] = Field(default_factory=list)
+    error: Optional[str] = None
