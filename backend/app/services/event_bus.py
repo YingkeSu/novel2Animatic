@@ -115,5 +115,24 @@ class EventBus:
             self.unsubscribe(project_id, queue)
 
 
+async def publish_progress(
+    project_id, step: str, progress: int, status: str, *, error_msg: str | None = None
+) -> int:
+    """Convenience publisher for the canonical pipeline ``progress`` event.
+
+    Centralizes the payload shape published at every pipeline milestone so
+    callers (run_media_pipeline, the text_split/short_fiction split_scenes
+    steps, and the failure paths) stay consistent.
+
+    ``status`` is the Task.status at this point ("running" / "done" / "failed").
+    ``project_id`` is coerced to ``str`` so the channel key matches the
+    subscriber key used by the ``/events`` route regardless of caller typing.
+    """
+    data: Dict[str, Any] = {"step": step, "progress": progress, "status": status}
+    if error_msg:
+        data["error_msg"] = error_msg
+    return await event_bus.publish(str(project_id), "progress", data)
+
+
 # Global singleton instance
 event_bus = EventBus()

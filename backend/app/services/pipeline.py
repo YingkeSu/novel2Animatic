@@ -16,6 +16,7 @@ from app.models.scene import Scene
 from app.models.task import Task
 from app.models.asset import Asset
 from app.services.stepfun_client import StepFunClient
+from app.services.event_bus import event_bus, publish_progress
 from app.services.style_engine import build_scene_split_system_prompt, get_visual_suffix, get_audio_params
 
 logger = logging.getLogger(__name__)
@@ -178,11 +179,17 @@ async def run_media_pipeline(
     Milestones written: 25 (generate_refs) -> 40 (generate_images) ->
     65 (generate_audio) -> 90 (assemble_video) -> 100 (complete). On success
     ``task.status``/``project.status`` are set to ``"done"``.
+
+    Each milestone also publishes a ``progress`` event to the in-process
+    ``event_bus`` for SSE subscribers, with a final ``complete`` event at the
+    end. The single-instance caveat applies (see issue #48 / PRD #1).
     """
+    project_id = project.id
     # Step 2: Generate project reference image
     task.step = "generate_refs"
     task.progress = 25
     await db.commit()
+    await publish_progress(project_id, "generate_refs", 25, "running")
 
     project_dir.mkdir(parents=True, exist_ok=True)
     await generate_reference_asset(db, client, project, scenes, project_dir)
@@ -191,6 +198,7 @@ async def run_media_pipeline(
     task.step = "generate_images"
     task.progress = 40
     await db.commit()
+    await publish_progress(project_id, "generate_images", 40, "running")
 
     await generate_scene_images(db, client, project, scenes, project_dir)
 
@@ -198,6 +206,7 @@ async def run_media_pipeline(
     task.step = "generate_audio"
     task.progress = 65
     await db.commit()
+    await publish_progress(project_id, "generate_audio", 65, "running")
 
     await generate_scene_audio(db, client, project, scenes, project_dir)
 
@@ -205,6 +214,7 @@ async def run_media_pipeline(
     task.step = "assemble_video"
     task.progress = 90
     await db.commit()
+    await publish_progress(project_id, "assemble_video", 90, "running")
 
     video_path = project_dir / "final.mp4"
     await assemble_video(project_dir, scenes, video_path)
@@ -216,6 +226,10 @@ async def run_media_pipeline(
     task.progress = 100
     project.status = "done"
     await db.commit()
+    # Terminal milestones: a final progress frame (status=done) for clients
+    # recovering via SSE alone, then the explicit complete event.
+    await publish_progress(project_id, "complete", 100, "done")
+    await event_bus.publish(str(project_id), "complete", {"status": "done", "project_id": project_id})
 
 
 async def run_pipeline_task(task_id: int):
@@ -237,6 +251,7 @@ async def run_pipeline_task(task_id: int):
             task.step = "split_scenes"
             task.progress = 10
             await db.commit()
+            await publish_progress(project_id, "split_scenes", 10, "running")
 
             scenes_data = await asyncio.to_thread(
                 _retry_call, split_scenes_sync, client, project.source_text, project.style_writing
@@ -276,6 +291,16 @@ async def run_pipeline_task(task_id: int):
             task.error_msg = log_pipeline_error(e, task_id=task_id, project_id=project_id)
             project.status = "failed"
             await db.commit()
+            # Notify SSE subscribers of the failure (sanitized; error_msg comes
+            # from log_pipeline_error and never leaks raw exception text per #45).
+            await publish_progress(
+                project_id, task.step or "error", task.progress or 0, "failed",
+                error_msg=task.error_msg,
+            )
+            await event_bus.publish(
+                str(project_id), "error",
+                {"step": task.step, "error": task.error_msg, "project_id": project_id},
+            )
 
 
 def split_scenes_sync(client: StepFunClient, text: str, style: str) -> list:

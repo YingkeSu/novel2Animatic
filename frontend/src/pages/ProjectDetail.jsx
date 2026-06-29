@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Typography, Progress, Button, Space, Tag, App, Alert } from 'antd'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
 import api, { projects, pipeline, styles as stylesApi } from '../services/api'
+import useSSE from '../hooks/useSSE'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -39,7 +40,6 @@ export default function ProjectDetail() {
   const [videoUrl, setVideoUrl] = useState('')
   const [referenceUrl, setReferenceUrl] = useState('')
   const [referenceAsset, setReferenceAsset] = useState(null)
-  const pollIntervalRef = useRef(null)
   const sceneAssetRequestRef = useRef(0)
   const canRun = ['created', 'failed', 'done'].includes(project?.status)
   const isRunning = project?.status === 'running' || isNonTerminalTaskStatus(taskProgress?.status)
@@ -66,8 +66,10 @@ export default function ProjectDetail() {
     try {
       const progress = await pipeline.progress(id)
       setTaskProgress(progress.data)
+      return progress.data
     } catch {
       setTaskProgress(null)
+      return null
     }
   }
 
@@ -81,11 +83,11 @@ export default function ProjectDetail() {
       if (project.scenes?.length > 0 && !selectedScene) {
         setSelectedScene(project.scenes[0])
       }
+      // One-shot recovery fetch (issue #48): GET /progress once on load to pick
+      // up the current state for a running/failed project; live updates thereafter
+      // arrive via the useSSE subscription (see onSseEvent below). No polling.
       if (project.status === 'failed' || project.status === 'running') {
         await loadProjectProgress()
-      }
-      if (project.status === 'running') {
-        pollProgress()
       }
     } catch (e) {
       console.error(e)
@@ -124,16 +126,23 @@ export default function ProjectDetail() {
     }
   }, [referenceUrl])
 
-  const clearPollInterval = () => {
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current)
-      pollIntervalRef.current = null
+  // SSE event handler (issue #48): live pipeline progress replaces 2s polling.
+  // - progress: update taskProgress in place (step + progress + status).
+  // - complete / error: terminal — reload the project to pick up done/failed
+  //   status, scene list, and assets. (Recovery on reconnect is handled by the
+  //   one-shot loadProjectProgress in loadProject.)
+  const onSseEvent = useCallback((evt) => {
+    if (!evt) return
+    if (evt.type === 'progress' && evt.data) {
+      setTaskProgress(evt.data)
+    } else if (evt.type === 'complete' || evt.type === 'error') {
+      loadProject()
     }
-  }
+  }, [id])
 
-  useEffect(() => () => {
-    clearPollInterval()
-  }, [])
+  // Subscribe to /events for this project. useSSE attaches the Bearer token,
+  // parses SSE frames, and auto-reconnects. Disabled (null) until we have an id.
+  useSSE(id ? String(id) : null, onSseEvent)
 
   const loadAuthenticatedAssetUrl = async (path, setter) => {
     setAssetLoadingCount((count) => count + 1)
@@ -245,8 +254,10 @@ export default function ProjectDetail() {
         message.success('Pipeline 已启动')
       }
       setProject(prev => prev ? { ...prev, status: 'running' } : prev)
-      setTaskProgress(null)
-      pollProgress()
+      setTaskProgress({ status: 'running', step: 'split_scenes', progress: 10 })
+      // One-shot recovery fetch (issue #48): the live updates arrive via the
+      // useSSE subscription; this just seeds the initial task row. No polling.
+      loadProjectProgress()
     } catch (e) {
       const detail = e.response?.data?.detail
       const msg = Array.isArray(detail) ? detail[0]?.msg || '启动失败' : detail || '启动失败'
@@ -254,36 +265,6 @@ export default function ProjectDetail() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const pollProgress = () => {
-    clearPollInterval()
-    // Immediate first poll, then every 2s
-    const doPoll = async () => {
-      try {
-        const res = await pipeline.progress(id)
-        setTaskProgress(res.data)
-        if (!isNonTerminalTaskStatus(res.data.status)) {
-          clearPollInterval()
-          loadProject()
-        }
-      } catch {
-        // Progress endpoint may 404 for non-pipeline source types (short_fiction, play_world)
-        // Fall back to polling project status directly
-        try {
-          const projRes = await projects.get(id)
-          const proj = projRes.data
-          if (proj.status !== 'running') {
-            clearPollInterval()
-            setProject(proj)
-          }
-        } catch {
-          // Transient error — keep polling
-        }
-      }
-    }
-    doPoll()
-    pollIntervalRef.current = setInterval(doPoll, 2000)
   }
 
   if (detailLoading && !project) {

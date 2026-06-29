@@ -7,8 +7,6 @@ const projectDetail = readFileSync(resolve(root, 'src/pages/ProjectDetail.jsx'),
 const theme = readFileSync(resolve(root, 'src/styles/theme.css'), 'utf8')
 
 const componentSnippets = [
-  'pollIntervalRef',
-  'clearPollInterval',
   "setImageUrl('')",
   "setAudioUrl('')",
   'detailLoading',
@@ -30,11 +28,15 @@ const componentSnippets = [
   'loadProjectProgress',
   'project.status === \'running\'',
   'pipeline.progress(id)',
-  'pollProgress()',
   'NON_TERMINAL_TASK_STATUSES',
   "['pending', 'running']",
   'isNonTerminalTaskStatus(taskProgress?.status)',
-  'isNonTerminalTaskStatus(res.data.status)',
+  // SSE-driven progress (issue #48): polling was replaced by a useSSE
+  // subscription; progress updates arrive as events and terminal events
+  // trigger a project reload.
+  'useSSE',
+  'onSseEvent',
+  "evt.type === 'progress'",
   'project-detail-asset-status',
   '正在加载当前场景媒体',
   'aria-live="polite"',
