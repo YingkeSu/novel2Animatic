@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import useStore from '../stores/auth'
 import api from '../services/api'
+import useSSE from '../hooks/useSSE'
 
 const SOURCE_TYPES = [
   { key: 'text_split', label: '📝 文本拆分', desc: '输入长文本，AI 自动拆分成场景' },
@@ -34,6 +35,115 @@ export default function ChatPage() {
   const [suggestedActions, setSuggestedActions] = useState([])
   const messagesEndRef = useRef(null)
 
+  // SSE-driven generation (issue #48): when a text_split / short_fiction run
+  // is kicked off, sseProjectId holds the project id being watched. The
+  // useSSE subscription delivers live progress + terminal events, replacing
+  // the previous 5s polling loops. pendingGenRef resolves when the run
+  // reaches a terminal state (complete/error).
+  const [sseProjectId, setSseProjectId] = useState(null)
+  const pendingGenRef = useRef(null)
+  const seenStepRef = useRef('')
+
+  const addMessage = useCallback((role, content) => {
+    setMessages(prev => [...prev, {
+      id: `${role}-${Date.now()}-${Math.random()}`,
+      role,
+      content,
+      parts: [{ type: 'text', content }],
+    }])
+  }, [])
+
+  const finalizeGeneration = useCallback(async (projectId, kind) => {
+    // kind: 'done' | 'failed' — fetch the project to read final status/scenes.
+    try {
+      const detail = await api.get(`/projects/${projectId}`)
+      const proj = detail.data
+      if (kind === 'done') {
+        const scenes = proj.scenes || []
+        addMessage('assistant', `✅ 生成完成！共 ${scenes.length} 个场景。查看完整项目：/project/${projectId}`)
+        for (const s of scenes.slice(0, 5)) {
+          addMessage('system', `🎬 场景 ${s.seq}: ${s.title}\n${s.text?.substring(0, 80)}...`)
+        }
+        if (scenes.length > 5) {
+          addMessage('system', `...还有 ${scenes.length - 5} 个场景，请查看项目详情`)
+        }
+      } else {
+        addMessage('system', `❌ 生成失败: ${proj.latest_error_msg || '未知错误'}`)
+      }
+    } catch {
+      if (kind === 'done') {
+        addMessage('assistant', `✅ 生成完成。查看完整项目：/project/${projectId}`)
+      } else {
+        addMessage('system', '❌ 生成失败，请稍后查看项目状态')
+      }
+    }
+    api.get('/projects').then(res => setProjects(res.data)).catch(() => {})
+  }, [addMessage])
+
+  const onSseEvent = useCallback((evt) => {
+    if (!evt || !pendingGenRef.current) return
+    const { projectId, resolve } = pendingGenRef.current
+    if (evt.type === 'progress' && evt.data) {
+      const { step, progress } = evt.data
+      if (step && step !== seenStepRef.current) {
+        seenStepRef.current = step
+        addMessage('system', `⏳ ${step}... (${progress ?? 0}%)`)
+      }
+    } else if (evt.type === 'complete') {
+      addMessage('system', '✅ 后台流水线已完成，正在加载结果...')
+      finalizeGeneration(projectId, 'done').finally(() => {
+        if (pendingGenRef.current) {
+          const p = pendingGenRef.current
+          pendingGenRef.current = null
+          setSseProjectId(null)
+          p.resolve()
+        }
+      })
+    } else if (evt.type === 'error') {
+      finalizeGeneration(projectId, 'failed').finally(() => {
+        if (pendingGenRef.current) {
+          const p = pendingGenRef.current
+          pendingGenRef.current = null
+          setSseProjectId(null)
+          p.resolve()
+        }
+      })
+    }
+  }, [addMessage, finalizeGeneration])
+
+  useSSE(sseProjectId, onSseEvent)
+
+  // Run a generation to completion via SSE. Returns a promise that resolves on
+  // a terminal event, with a hard safety-net timeout (the SSE is the primary
+  // signal; this only guards against a permanently-silent stream so the UI is
+  // never stuck "loading"). This is NOT polling /progress.
+  const runGenerationViaSse = (projectId, { timeoutMs = 600000 } = {}) =>
+    new Promise((resolve) => {
+      seenStepRef.current = ''
+      pendingGenRef.current = { projectId, resolve }
+      setSseProjectId(String(projectId))
+      // Safety net: if no terminal event ever arrives (e.g. SSE unreachable on
+      // this client), fall back to a single recovery GET and resolve.
+      const timer = setTimeout(() => {
+        if (pendingGenRef.current && pendingGenRef.current.projectId === projectId) {
+          pendingGenRef.current = null
+          setSseProjectId(null)
+          addMessage('system', '⏰ 实时连接超时，请稍后查看项目状态')
+          api.get(`/projects/${projectId}`).then(res => {
+            if (res.data.status === 'done') finalizeGeneration(projectId, 'done')
+            else if (res.data.status === 'failed') finalizeGeneration(projectId, 'failed')
+          }).catch(() => {}).finally(resolve)
+        } else {
+          resolve()
+        }
+      }, timeoutMs)
+      // Clear the safety net when the SSE path resolves.
+      const origResolve = resolve
+      const wrapped = pendingGenRef.current
+      wrapped.resolve = () => { clearTimeout(timer); origResolve() }
+      pendingGenRef.current = wrapped
+    })
+
   // Load projects list
   useEffect(() => {
     api.get('/projects').then(res => setProjects(res.data)).catch(() => {})
@@ -59,15 +169,6 @@ export default function ChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
-
-  const addMessage = (role, content) => {
-    setMessages(prev => [...prev, {
-      id: `${role}-${Date.now()}-${Math.random()}`,
-      role,
-      content,
-      parts: [{ type: 'text', content }],
-    }])
-  }
 
   const createProject = async (title, srcType, dir, srcText = '') => {
     const res = await api.post('/projects', {
@@ -103,34 +204,9 @@ export default function ChatPage() {
           chapter_count: 3,
         })
 
-        // Poll for completion
-        let attempts = 0
-        const maxAttempts = 60 // 5 minutes at 5s intervals
-        while (attempts < maxAttempts) {
-          await new Promise(r => setTimeout(r, 5000))
-          attempts++
-          try {
-            const detail = await api.get(`/projects/${project.id}`)
-            if (detail.data.status === 'done') {
-              const scenes = detail.data.scenes || []
-              addMessage('assistant', `✅ 生成完成！共 ${scenes.length} 个场景。查看完整项目：/project/${project.id}`)
-              for (const s of scenes) {
-                addMessage('system', `🎬 场景 ${s.seq}: ${s.title}\n${s.text?.substring(0, 100)}...`)
-              }
-              break
-            } else if (detail.data.status === 'failed') {
-              addMessage('system', `❌ 生成失败: ${detail.data.latest_error_msg || '未知错误'}`)
-              break
-            }
-          } catch (e) {
-            // Ignore poll errors
-          }
-        }
-        if (attempts >= maxAttempts) {
-          addMessage('system', '⏰ 生成超时，请稍后查看项目状态')
-        }
-        // Refresh projects list
-        api.get('/projects').then(res => setProjects(res.data)).catch(() => {})
+        // Wait for completion via SSE (issue #48): live progress messages are
+        // appended by onSseEvent; no polling of /progress.
+        await runGenerationViaSse(project.id)
 
       } else if (sourceType === 'play_world') {
         // Play world mode
@@ -172,44 +248,9 @@ export default function ChatPage() {
         // Run pipeline
         await api.post(`/projects/${project.id}/run`)
 
-        // Poll for completion
-        let attempts = 0
-        const maxAttempts = 96 // 8 minutes at 5s intervals
-        let lastStep = ''
-        while (attempts < maxAttempts) {
-          await new Promise(r => setTimeout(r, 5000))
-          attempts++
-          try {
-            const progressRes = await api.get(`/projects/${project.id}/progress`)
-            const { status, step, progress } = progressRes.data
-            if (step !== lastStep) {
-              addMessage('system', `⏳ ${step}... (${progress}%)`)
-              lastStep = step
-            }
-            if (status === 'done') {
-              const detail = await api.get(`/projects/${project.id}`)
-              const scenes = detail.data.scenes || []
-              addMessage('assistant', `✅ 生成完成！共 ${scenes.length} 个场景。查看完整项目：/project/${project.id}`)
-              for (const s of scenes.slice(0, 5)) {
-                addMessage('system', `🎬 场景 ${s.seq}: ${s.title}\n${s.text?.substring(0, 80)}...`)
-              }
-              if (scenes.length > 5) {
-                addMessage('system', `...还有 ${scenes.length - 5} 个场景，请查看项目详情`)
-              }
-              break
-            } else if (status === 'failed') {
-              addMessage('system', `❌ 生成失败: ${progressRes.data.error_msg || '未知错误'}`)
-              break
-            }
-          } catch (e) {
-            // Ignore poll errors
-          }
-        }
-        if (attempts >= maxAttempts) {
-          addMessage('system', '⏰ 生成超时，请稍后查看项目状态')
-        }
-        // Refresh projects list
-        api.get('/projects').then(res => setProjects(res.data)).catch(() => {})
+        // Wait for completion via SSE (issue #48): live progress messages are
+        // appended by onSseEvent; no polling of /progress.
+        await runGenerationViaSse(project.id)
       }
     } catch (err) {
       console.error('Failed:', err)

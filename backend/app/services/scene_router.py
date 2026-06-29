@@ -30,6 +30,7 @@ from sqlalchemy import select
 from app.models.project import Project
 from app.models.scene import Scene
 from app.models.task import Task
+from app.services.event_bus import event_bus, publish_progress
 from app.services.stepfun_client import StepFunClient
 from app.services.world_engine import WorldEngine
 
@@ -150,6 +151,9 @@ async def _run_short_fiction_generation(
         await db.commit()
         await db.refresh(task)
         task_id = task.id
+    # Publish the initial split_scenes milestone so SSE subscribers see the
+    # run has started (mirrors the text_split publish in run_pipeline_task).
+    await publish_progress(project_id, "split_scenes", 10, "running")
 
     try:
         gen_result = await gen.generate(
@@ -171,6 +175,14 @@ async def _run_short_fiction_generation(
                 task.status = "failed"
                 task.error_msg = sanitized
             await db.commit()
+        # Notify SSE subscribers of the split_scenes failure.
+        await publish_progress(
+            project_id, "split_scenes", 10, "failed", error_msg=sanitized
+        )
+        await event_bus.publish(
+            str(project_id), "error",
+            {"step": "split_scenes", "error": sanitized, "project_id": project_id},
+        )
         return
 
     # Save scenes
@@ -230,6 +242,15 @@ async def _run_short_fiction_generation(
             if project:
                 project.status = "failed"
             await db.commit()
+        # Notify SSE subscribers of the media-pipeline failure. task.step reflects
+        # how far run_media_pipeline progressed before raising.
+        await publish_progress(
+            project_id, "error", 0, "failed", error_msg=sanitized
+        )
+        await event_bus.publish(
+            str(project_id), "error",
+            {"step": "media_pipeline", "error": sanitized, "project_id": project_id},
+        )
 
 
 def start_background_generation(

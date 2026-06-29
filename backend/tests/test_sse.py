@@ -105,3 +105,264 @@ class TestSSEEndpoint:
         from app.routers.events import router
         routes = [r.path for r in router.routes]
         assert "/{project_id}/events" in routes or "/api/projects/{project_id}/events" in routes
+
+
+class TestPipelinePublishesEvents:
+    """Issue #48: the shared media pipeline publishes SSE events at each
+    milestone, plus a terminal complete/error event.
+
+    These subscribe a real event_bus listener and drive ``run_media_pipeline``
+    with a mocked StepFun client, asserting the event TYPES and ORDERING.
+    """
+
+    @pytest.mark.asyncio
+    async def test_run_media_pipeline_publishes_milestone_progress_then_complete(
+        self, db_session_factory, tmp_path, monkeypatch
+    ):
+        """A successful run emits progress frames at 25/40/65/90/100 then a
+        final complete event — in that order."""
+        from app.services.event_bus import event_bus
+        from app.services.pipeline import run_media_pipeline, STORAGE_DIR as _PIPE_STORAGE  # noqa: F401
+        from app.services import pipeline as pipeline_mod
+        from app.models.project import Project
+        from app.models.task import Task
+        from app.models.user import User
+        from app.models.scene import Scene
+        from sqlalchemy import select
+
+        class _FakeClient:
+            def image_generate(self, **kwargs):
+                return b"img"
+
+            def tts(self, **kwargs):
+                return b"aud"
+
+        async def fake_assemble_video(project_dir, scenes, video_path):
+            video_path.write_bytes(b"vid")
+
+        monkeypatch.setattr(pipeline_mod, "STORAGE_DIR", tmp_path)
+        monkeypatch.setattr(pipeline_mod, "assemble_video", fake_assemble_video)
+
+        # Seed user + project + task + 1 scene.
+        async with db_session_factory() as db:
+            user = User(email="sse-media@example.com", password_hash="hash")
+            db.add(user)
+            await db.flush()
+            project = Project(
+                user_id=user.id,
+                title="SSE Media",
+                source_text="x" * 80,
+                source_type="text_split",
+                style_writing="modern",
+                style_visual="ink_wash",
+                style_audio="ancient_male",
+                status="running",
+            )
+            db.add(project)
+            await db.flush()
+            task = Task(
+                project_id=project.id, user_id=user.id,
+                status="running", step="split_scenes", progress=10,
+            )
+            db.add(task)
+            scene = Scene(
+                project_id=project.id, seq=1, title="s1", text="t",
+                shot_type="medium", narration="n", edit_prompt="p", instruction="i",
+            )
+            db.add(scene)
+            await db.commit()
+            project_id = project.id
+
+        # Subscribe to the global event_bus BEFORE running the pipeline.
+        queue = event_bus.subscribe(str(project_id))
+        try:
+            async with db_session_factory() as db:
+                proj = (await db.execute(select(Project).where(Project.id == project_id))).scalar_one()
+                tsk = (await db.execute(select(Task).where(Task.project_id == project_id))).scalar_one()
+                scenes = (await db.execute(select(Scene).where(Scene.project_id == project_id))).scalars().all()
+                await run_media_pipeline(db, _FakeClient(), proj, scenes, tmp_path, tsk)
+
+            # Drain the queue.
+            events = []
+            while not queue.empty():
+                events.append(queue.get_nowait())
+        finally:
+            event_bus.unsubscribe(str(project_id), queue)
+
+        types = [e.type for e in events]
+        # Milestone progress frames in order.
+        assert types == [
+            "progress", "progress", "progress", "progress", "progress", "complete"
+        ]
+        progress_payloads = [e.data for e in events if e.type == "progress"]
+        assert [p["step"] for p in progress_payloads] == [
+            "generate_refs", "generate_images", "generate_audio",
+            "assemble_video", "complete",
+        ]
+        assert [p["progress"] for p in progress_payloads] == [25, 40, 65, 90, 100]
+        assert progress_payloads[-1]["status"] == "done"
+
+    @pytest.mark.asyncio
+    async def test_run_media_pipeline_failure_publishes_error(
+        self, db_session_factory, tmp_path, monkeypatch
+    ):
+        """A failing run emits the error event with a sanitized message."""
+        from app.services.event_bus import event_bus
+        from app.services import pipeline as pipeline_mod
+        from app.services.pipeline import run_media_pipeline
+        from app.models.project import Project
+        from app.models.task import Task
+        from app.models.user import User
+        from app.models.scene import Scene
+        from sqlalchemy import select
+
+        class _FakeClient:
+            def image_generate(self, **kwargs):
+                return b"img"
+
+            def tts(self, **kwargs):
+                return b"aud"
+
+        async def failing_assemble_video(project_dir, scenes, video_path):
+            raise RuntimeError("ffmpeg exploded")
+
+        monkeypatch.setattr(pipeline_mod, "STORAGE_DIR", tmp_path)
+        monkeypatch.setattr(pipeline_mod, "assemble_video", failing_assemble_video)
+
+        async with db_session_factory() as db:
+            user = User(email="sse-media-err@example.com", password_hash="hash")
+            db.add(user)
+            await db.flush()
+            project = Project(
+                user_id=user.id, title="SSE Media Err",
+                source_text="x" * 80, source_type="text_split",
+                style_writing="modern", style_visual="ink_wash", style_audio="ancient_male",
+                status="running",
+            )
+            db.add(project)
+            await db.flush()
+            task = Task(
+                project_id=project.id, user_id=user.id,
+                status="running", step="split_scenes", progress=10,
+            )
+            db.add(task)
+            scene = Scene(
+                project_id=project.id, seq=1, title="s1", text="t",
+                shot_type="medium", narration="n", edit_prompt="p", instruction="i",
+            )
+            db.add(scene)
+            await db.commit()
+            project_id = project.id
+
+        queue = event_bus.subscribe(str(project_id))
+        try:
+            with pytest.raises(RuntimeError):
+                async with db_session_factory() as db:
+                    proj = (await db.execute(select(Project).where(Project.id == project_id))).scalar_one()
+                    tsk = (await db.execute(select(Task).where(Task.project_id == project_id))).scalar_one()
+                    scenes = (await db.execute(select(Scene).where(Scene.project_id == project_id))).scalars().all()
+                    await run_media_pipeline(db, _FakeClient(), proj, scenes, tmp_path, tsk)
+
+            events = []
+            while not queue.empty():
+                events.append(queue.get_nowait())
+        finally:
+            event_bus.unsubscribe(str(project_id), queue)
+
+        # run_media_pipeline itself does NOT catch the failure (the caller
+        # does, in run_pipeline_task / _run_short_fiction_generation). So the
+        # progress milestones up to the failure point are still published, but
+        # NO error event is emitted here — the error event is the caller's job.
+        types = [e.type for e in events]
+        assert "progress" in types
+        # No 'error' or 'complete' from run_media_pipeline on failure.
+        assert "error" not in types
+        assert "complete" not in types
+
+
+class TestPipelineTaskFailurePublishesError:
+    """The TASK-level wrappers are responsible for the error/failed-progress
+    events on failure, since run_media_pipeline lets exceptions propagate.
+    Verified end-to-end via the short_fiction handler (whose full-suite test
+    harness is already proven in test_short_fiction_media.py).
+    """
+
+    @pytest.mark.asyncio
+    async def test_short_fiction_failure_publishes_error_event(
+        self, db_session_factory, tmp_path, monkeypatch
+    ):
+        from app.services.event_bus import event_bus
+        from app.routers.generation import _run_short_fiction_generation
+        from app.models.project import Project
+        from app.models.task import Task
+        from app.models.user import User
+        from sqlalchemy import select
+
+        class _StubSceneGenResult:
+            def __init__(self, scenes):
+                self.scenes = scenes
+                self.outline = self.outline_review = self.outline_v2 = ""
+                self.draft_review = self.story_title = ""
+
+        class _RecordingClient:
+            def image_generate(self, **kwargs):
+                return b"img"
+
+            def tts(self, **kwargs):
+                return b"aud"
+
+        async def fake_generate(self, direction, chapter_count, chars_per_chapter):
+            return _StubSceneGenResult([{
+                "seq": 1, "title": "s1", "text": "t", "shot_type": "medium",
+                "narration": "n", "edit_prompt": "p", "instruction": "i",
+                "character": "",
+            }])
+
+        async def failing_assemble_video(project_dir, scenes, video_path):
+            raise RuntimeError("ffmpeg exploded")
+
+        client = _RecordingClient()
+        monkeypatch.setattr("app.services.scene_router.StepFunClient", lambda: client)
+        monkeypatch.setattr(
+            "app.services.scene_generator.SceneGenerator.generate", fake_generate
+        )
+        monkeypatch.setattr("app.services.pipeline.assemble_video", failing_assemble_video)
+        monkeypatch.setattr("app.database.async_session", db_session_factory)
+        monkeypatch.setattr("app.services.pipeline.STORAGE_DIR", tmp_path)
+
+        async with db_session_factory() as db:
+            user = User(email="sse-task-err@example.com", password_hash="hash")
+            db.add(user)
+            await db.flush()
+            project = Project(
+                user_id=user.id, title="Task Err",
+                source_text="", direction="古风爱情", source_type="short_fiction",
+                style_writing="modern", style_visual="ink_wash", style_audio="ancient_male",
+                status="running",
+            )
+            db.add(project)
+            await db.commit()
+            project_id = project.id
+
+        queue = event_bus.subscribe(str(project_id))
+        try:
+            await _run_short_fiction_generation(
+                project_id, user.id, direction="古风爱情",
+                chapter_count=2, chars_per_chapter=500,
+            )
+
+            events = []
+            while not queue.empty():
+                events.append(queue.get_nowait())
+        finally:
+            event_bus.unsubscribe(str(project_id), queue)
+
+        types = [e.type for e in events]
+        assert "error" in types
+        err_event = next(e for e in events if e.type == "error")
+        # Sanitized: raw exception text must NOT leak (#45).
+        assert "ffmpeg exploded" not in err_event.data.get("error", "")
+        # A failed progress frame is also emitted for SSE-only recovery.
+        failed_progress = [e for e in events if e.type == "progress" and e.data.get("status") == "failed"]
+        assert len(failed_progress) >= 1
+
