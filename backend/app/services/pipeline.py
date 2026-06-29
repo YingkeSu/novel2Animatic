@@ -115,6 +115,109 @@ async def generate_reference_asset(db: AsyncSession, client: StepFunClient, proj
     return asset
 
 
+async def generate_scene_images(db: AsyncSession, client: StepFunClient, project: Project, scenes: list, project_dir: Path):
+    """Step 3: generate one image per scene via client.image_generate."""
+    visual_suffix = get_visual_suffix(project.style_visual)
+    for scene in scenes:
+        img_data = await asyncio.to_thread(
+            _retry_call, client.image_generate,
+            prompt=scene.edit_prompt + visual_suffix,
+            extra_body={"cfg_scale": 1.0, "steps": 8, "seed": 42 + scene.seq},
+            size="1024x1024",
+        )
+        img_path = project_dir / f"scene_{scene.seq}.png"
+        img_path.write_bytes(img_data)
+        db.add(Asset(project_id=project.id, scene_id=scene.id, type="image", file_path=str(img_path), file_size=len(img_data)))
+    await db.flush()
+
+
+async def generate_scene_audio(db: AsyncSession, client: StepFunClient, project: Project, scenes: list, project_dir: Path):
+    """Step 4: generate one TTS audio per scene via client.tts."""
+    audio_params = get_audio_params(project.style_audio)
+    for scene in scenes:
+        instruction = (
+            scene.instruction
+            if isinstance(scene.instruction, str) and scene.instruction.strip()
+            else audio_params["instruction"]
+        )
+        audio_data = await asyncio.to_thread(
+            _retry_call, client.tts,
+            text=scene.narration,
+            voice=audio_params["voice"],
+            extra_body={
+                "volume": audio_params["volume"],
+                "speed": audio_params["speed"],
+                "instruction": instruction,
+            },
+        )
+        audio_path = project_dir / f"scene_{scene.seq}.mp3"
+        audio_path.write_bytes(audio_data)
+        db.add(Asset(project_id=project.id, scene_id=scene.id, type="audio", file_path=str(audio_path), file_size=len(audio_data)))
+    await db.flush()
+
+
+async def run_media_pipeline(
+    db: AsyncSession,
+    client: StepFunClient,
+    project: Project,
+    scenes: list,
+    project_dir: Path,
+    task: Task,
+):
+    """Execute the shared media steps 2-5 and update task progress milestones.
+
+    Single source of truth for both ``text_split`` (run_pipeline_task) and
+    ``short_fiction`` (_run_short_fiction_generation). The caller is responsible
+    for:
+
+      - loading ``project`` and ``scenes`` from the DB,
+      - owning the ``db`` session lifecycle (commits happen here per-step, but
+        the session is provided by the caller),
+      - error handling and partial-output cleanup on failure.
+
+    Milestones written: 25 (generate_refs) -> 40 (generate_images) ->
+    65 (generate_audio) -> 90 (assemble_video) -> 100 (complete). On success
+    ``task.status``/``project.status`` are set to ``"done"``.
+    """
+    # Step 2: Generate project reference image
+    task.step = "generate_refs"
+    task.progress = 25
+    await db.commit()
+
+    project_dir.mkdir(parents=True, exist_ok=True)
+    await generate_reference_asset(db, client, project, scenes, project_dir)
+
+    # Step 3: Generate scene images
+    task.step = "generate_images"
+    task.progress = 40
+    await db.commit()
+
+    await generate_scene_images(db, client, project, scenes, project_dir)
+
+    # Step 4: Generate TTS audio
+    task.step = "generate_audio"
+    task.progress = 65
+    await db.commit()
+
+    await generate_scene_audio(db, client, project, scenes, project_dir)
+
+    # Step 5: Assemble video
+    task.step = "assemble_video"
+    task.progress = 90
+    await db.commit()
+
+    video_path = project_dir / "final.mp4"
+    await assemble_video(project_dir, scenes, video_path)
+    if video_path.exists():
+        db.add(Asset(project_id=project.id, type="video", file_path=str(video_path), file_size=video_path.stat().st_size))
+
+    task.status = "done"
+    task.step = "complete"
+    task.progress = 100
+    project.status = "done"
+    await db.commit()
+
+
 async def run_pipeline_task(task_id: int):
     """Execute the full pipeline for a task."""
     async with async_session() as db:
@@ -155,80 +258,15 @@ async def run_pipeline_task(task_id: int):
                 db.add(scene)
             await db.commit()
 
-            # Step 2: Generate character reference images
-            task.step = "generate_refs"
-            task.progress = 25
-            await db.commit()
-
+            # Steps 2-5: shared media pipeline (reference -> scene images -> TTS -> video)
             project_dir = STORAGE_DIR / str(project.user_id) / str(project.id)
-            project_dir.mkdir(parents=True, exist_ok=True)
 
             scenes_result = await db.execute(
                 select(Scene).where(Scene.project_id == project.id).order_by(Scene.seq)
             )
             scenes = scenes_result.scalars().all()
-            await generate_reference_asset(db, client, project, scenes, project_dir)
 
-            # Step 3: Generate scene images
-            task.step = "generate_images"
-            task.progress = 40
-            await db.commit()
-
-            visual_suffix = get_visual_suffix(project.style_visual)
-            for scene in scenes:
-                img_data = await asyncio.to_thread(
-                _retry_call, client.image_generate,
-                prompt=scene.edit_prompt + visual_suffix,
-                extra_body={"cfg_scale": 1.0, "steps": 8, "seed": 42 + scene.seq},
-                size="1024x1024",
-            )
-                img_path = project_dir / f"scene_{scene.seq}.png"
-                img_path.write_bytes(img_data)
-                db.add(Asset(project_id=project.id, scene_id=scene.id, type="image", file_path=str(img_path), file_size=len(img_data)))
-            await db.commit()
-
-            # Step 4: Generate TTS audio
-            task.step = "generate_audio"
-            task.progress = 65
-            await db.commit()
-
-            audio_params = get_audio_params(project.style_audio)
-            for scene in scenes:
-                instruction = (
-                    scene.instruction
-                    if isinstance(scene.instruction, str) and scene.instruction.strip()
-                    else audio_params["instruction"]
-                )
-                audio_data = await asyncio.to_thread(
-                    _retry_call, client.tts,
-                    text=scene.narration,
-                    voice=audio_params["voice"],
-                    extra_body={
-                        "volume": audio_params["volume"],
-                        "speed": audio_params["speed"],
-                        "instruction": instruction,
-                    },
-                )
-                audio_path = project_dir / f"scene_{scene.seq}.mp3"
-                audio_path.write_bytes(audio_data)
-                db.add(Asset(project_id=project.id, scene_id=scene.id, type="audio", file_path=str(audio_path), file_size=len(audio_data)))
-            await db.commit()
-
-            # Step 5: Assemble video
-            task.step = "assemble_video"
-            task.progress = 90
-            await db.commit()
-
-            video_path = project_dir / "final.mp4"
-            await assemble_video(project_dir, scenes, video_path)
-            if video_path.exists():
-                db.add(Asset(project_id=project.id, type="video", file_path=str(video_path), file_size=video_path.stat().st_size))
-
-            task.status = "done"
-            task.step = "complete"
-            task.progress = 100
-            project.status = "done"
-            await db.commit()
+            await run_media_pipeline(db, client, project, scenes, project_dir, task)
 
         except Exception as e:
             from app.services.errors import log_pipeline_error
