@@ -106,7 +106,7 @@ async def test_short_fiction_creates_all_assets_and_video(db_session_factory, tm
     async def fake_assemble_video(project_dir, scenes, video_path):
         video_path.write_bytes(b"video-bytes")
 
-    monkeypatch.setattr("app.routers.generation.StepFunClient", lambda: client)
+    monkeypatch.setattr("app.services.scene_router.StepFunClient", lambda: client)
     monkeypatch.setattr(
         "app.services.scene_generator.SceneGenerator.generate", fake_generate
     )
@@ -116,7 +116,6 @@ async def test_short_fiction_creates_all_assets_and_video(db_session_factory, tm
 
     # STORAGE_DIR lives in both pipeline and generation modules; patch both.
     monkeypatch.setattr("app.services.pipeline.STORAGE_DIR", tmp_path)
-    monkeypatch.setattr("app.routers.generation.STORAGE_DIR", tmp_path, raising=False)
 
     user_id, project_id = await _seed_project(db_session_factory)
 
@@ -178,14 +177,13 @@ async def test_short_fiction_task_milestones_progress_through_steps(db_session_f
     async def fake_assemble_video(project_dir, scenes, video_path):
         video_path.write_bytes(b"video-bytes")
 
-    monkeypatch.setattr("app.routers.generation.StepFunClient", lambda: client)
+    monkeypatch.setattr("app.services.scene_router.StepFunClient", lambda: client)
     monkeypatch.setattr(
         "app.services.scene_generator.SceneGenerator.generate", fake_generate
     )
     monkeypatch.setattr("app.services.pipeline.assemble_video", fake_assemble_video)
     monkeypatch.setattr("app.database.async_session", db_session_factory)
     monkeypatch.setattr("app.services.pipeline.STORAGE_DIR", tmp_path)
-    monkeypatch.setattr("app.routers.generation.STORAGE_DIR", tmp_path, raising=False)
 
     user_id, project_id = await _seed_project(db_session_factory)
 
@@ -226,14 +224,13 @@ async def test_short_fiction_failure_does_not_cleanup_partial_outputs(db_session
     async def failing_assemble_video(project_dir, scenes, video_path):
         raise RuntimeError("ffmpeg exploded")
 
-    monkeypatch.setattr("app.routers.generation.StepFunClient", lambda: client)
+    monkeypatch.setattr("app.services.scene_router.StepFunClient", lambda: client)
     monkeypatch.setattr(
         "app.services.scene_generator.SceneGenerator.generate", fake_generate
     )
     monkeypatch.setattr("app.services.pipeline.assemble_video", failing_assemble_video)
     monkeypatch.setattr("app.database.async_session", db_session_factory)
     monkeypatch.setattr("app.services.pipeline.STORAGE_DIR", tmp_path)
-    monkeypatch.setattr("app.routers.generation.STORAGE_DIR", tmp_path, raising=False)
 
     user_id, project_id = await _seed_project(db_session_factory)
 
@@ -269,13 +266,12 @@ async def test_short_fiction_scene_generation_failure_marks_failed(db_session_fa
     async def failing_generate(self, direction, chapter_count, chars_per_chapter):
         raise RuntimeError("llm down")
 
-    monkeypatch.setattr("app.routers.generation.StepFunClient", _RecordingClient)
+    monkeypatch.setattr("app.services.scene_router.StepFunClient", _RecordingClient)
     monkeypatch.setattr(
         "app.services.scene_generator.SceneGenerator.generate", failing_generate
     )
     monkeypatch.setattr("app.database.async_session", db_session_factory)
     monkeypatch.setattr("app.services.pipeline.STORAGE_DIR", tmp_path)
-    monkeypatch.setattr("app.routers.generation.STORAGE_DIR", tmp_path, raising=False)
 
     user_id, project_id = await _seed_project(db_session_factory)
 

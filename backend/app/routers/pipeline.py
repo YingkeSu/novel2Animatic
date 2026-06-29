@@ -1,4 +1,10 @@
-"""Pipeline router - trigger and monitor pipeline execution."""
+"""Pipeline router - trigger and monitor pipeline execution.
+
+This router is a thin HTTP layer: auth + ownership filtering, the run guard
+(409 when already running), retry cleanup, Task creation, and kicking off the
+background pipeline. The selection of which handler runs for a given
+``source_type`` lives in :mod:`app.services.scene_router`.
+"""
 
 import asyncio
 import shutil
@@ -16,6 +22,7 @@ from app.models.scene import Scene
 from app.models.asset import Asset
 from app.schemas import ProgressResponse
 from app.services.auth import get_current_user
+from app.services.scene_router import start_background_generation
 
 router = APIRouter(prefix="/api/projects", tags=["pipeline"])
 TERMINAL_TASK_STATUSES = {"done", "failed"}
@@ -58,8 +65,12 @@ async def run_pipeline(
     await db.commit()
     await db.refresh(task)
 
-    from app.tasks.pipeline import run_pipeline_task
-    asyncio.create_task(run_pipeline_task(task.id))
+    # Dispatch to the text_split handler via scene_router. Background source:
+    # the coroutine is scheduled so this request returns immediately.
+    coro = start_background_generation(
+        project.source_type, task_id=task.id, project_id=project_id, user_id=user.id
+    )
+    asyncio.create_task(coro)
 
     return {"task_id": task.id, "status": "pending"}
 
