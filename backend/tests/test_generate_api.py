@@ -189,3 +189,35 @@ class TestGenerateEndpoint:
         assert "scene_text" in data
         assert "suggested_actions" in data
         assert data["turn"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_play_world_failure_sanitizes_error(self, client):
+        """/play 500 must return a generic message, not the raw exception string."""
+        token = await register_and_get_token(client, "play_fail@test.com")
+        resp = await create_project(
+            client, token,
+            source_type="play_world",
+            direction="竹林探险",
+            source_text="",
+        )
+        project_id = resp.json()["id"]
+
+        leaked_secret = "/internal/stack/trace.py::LeakyClass"
+
+        async def boom(*args, **kwargs):
+            raise RuntimeError(f"Traceback ... {leaked_secret} db connection failed")
+
+        with patch("app.services.world_engine.WorldEngine.step", new_callable=AsyncMock) as mock_step:
+            mock_step.side_effect = boom
+            resp = await client.post(
+                f"/api/projects/{project_id}/play",
+                json={"raw_input": "看看周围", "context": "竹林深处"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        assert resp.status_code == 500
+        detail = resp.json().get("detail", "")
+        assert leaked_secret not in detail
+        assert "Traceback" not in detail
+        assert "db connection failed" not in detail
+        assert detail == "回合执行失败，请稍后重试。"

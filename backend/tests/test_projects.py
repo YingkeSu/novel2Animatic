@@ -59,14 +59,14 @@ async def test_list_projects_includes_latest_failure_message(client: AsyncClient
     async with db_session_factory() as db:
         project = await db.get(Project, project_id)
         project.status = "failed"
-        db.add(Task(project_id=project_id, user_id=project.user_id, status="failed", step="split_scenes", progress=10, error_msg="LLM JSON parse failed"))
+        db.add(Task(project_id=project_id, user_id=project.user_id, status="failed", step="split_scenes", progress=10, error_msg="生成失败，请稍后重试。"))
         await db.commit()
 
     response = await client.get("/api/projects", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 200
     [project] = response.json()
-    assert project["latest_error_msg"] == "LLM JSON parse failed"
+    assert project["latest_error_msg"] == "生成失败，请稍后重试。"
 
 
 @pytest.mark.asyncio
